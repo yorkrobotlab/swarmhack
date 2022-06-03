@@ -50,6 +50,7 @@ class Camera(threading.Thread):
 
             cv2.aruco.drawDetectedMarkers(frame, tags, ids, borderColor = (0, 255, 0))
 
+            # TODO: Handle case when no tags are detected (.tolist error)
             self.robot_ids = ids.tolist()
 
             for tag in tags:
