@@ -1,0 +1,127 @@
+<html>
+<head>
+</head>
+
+<body>
+<button id="click">Get state</button>
+<div id="state"></div>
+
+<button id="leds">Set LEDs</button>
+
+<div class="slidecontainer">
+<input type="range" min="0" max="255" value="0" class="slider" id="leftwheel">
+</div>
+
+<div class="slidecontainer">
+<input type="range" min="0" max="255" value="0" class="slider" id="rightwheel">
+</div>
+
+<input type="checkbox" id="avoider" name="avoider" value="false">
+<label for="avoider">Begin avoiding</label><br>
+
+<script>
+
+var websocket;
+
+var irvalues = new Array(0,0,0,0,0);
+var irdetect = new Array(false, false, false, false, false);
+var avoiderstate = 0;
+
+window.addEventListener('load', function(event) {
+
+    console.log('Opening connection...');
+    websocket = new WebSocket('ws://192.168.1.152/ws');
+    websocket.onopen    = onOpen;
+    websocket.onclose   = onClose;
+    websocket.onmessage = onMessage;
+
+    document.getElementById('click').addEventListener('click', function(event) {
+        websocket.send(JSON.stringify({'get-state': true}));
+    });
+
+    document.getElementById('leds').addEventListener('click', function(event) {
+        websocket.send(JSON.stringify({'set-state': {'led': {
+            'num': 1, 
+            'r': Math.floor(Math.random() * 256), 
+            'g': Math.floor(Math.random() * 256), 
+            'b': Math.floor(Math.random() * 256)
+        }}}));
+        websocket.send(JSON.stringify({'set-state': {'led': {
+            'num': 2, 
+            'r': Math.floor(Math.random() * 256), 
+            'g': Math.floor(Math.random() * 256), 
+            'b': Math.floor(Math.random() * 256)
+        }}}));
+    });
+
+    document.getElementById("leftwheel").oninput = function() {
+        websocket.send(JSON.stringify({'set-state': {'left_motor_forward': JSON.stringify(Math.floor(this.value))}}));
+    }
+    document.getElementById("rightwheel").oninput = function() {
+        websocket.send(JSON.stringify({'set-state': {'right_motor_forward': Math.floor(this.value)}}));
+    }
+
+    setInterval(runAvoider, 100);
+});
+
+function runAvoider() {
+    if(websocket.readyState != websocket.OPEN) return;
+
+    if(document.getElementById("avoider").checked) {
+        websocket.send(JSON.stringify({'get-ir': true}));
+
+        switch(avoiderstate) {
+            case 0: 
+                websocket.send(JSON.stringify(
+                    {'set-state': {
+                        'left_motor_forward': 150,
+                        'right_motor_forward': 150
+                    }}));
+                break;
+            case 1: 
+                websocket.send(JSON.stringify(
+                    {'set-state': {
+                        'left_motor_backward': 100,
+                        'right_motor_forward': 100
+                    }}));   
+                break;
+            case 2: 
+                websocket.send(JSON.stringify(
+                    {'set-state': {
+                        'left_motor_forward': 100,
+                        'right_motor_backward': 100
+                    }}));   
+            break;
+        }
+
+        if(irdetect[2] || irdetect[3] || irdetect[4]) avoiderstate = 1;
+        else if(irdetect[0]) avoiderstate = 2;
+        else if(irdetect[4]) avoiderstate = 1;
+        else avoiderstate = 0;
+    }
+}
+
+function onOpen(event) {
+    console.log('Connection opened');
+}
+
+function onClose(event) {
+    console.log('Connection closed');
+}
+
+function onMessage(event) {
+    let data = JSON.parse(event.data);
+    //document.getElementById('state').textContent = JSON.stringify(data);
+    //console.log(data);
+
+    if(data.hasOwnProperty("ir")) {
+        for(let i = 0; i < 5; i++) {
+            irvalues[i] = data["ir"][i];
+            irdetect[i] = (irvalues[i] > 35);
+        }
+    }
+}
+
+</script>
+</body>
+</html>
