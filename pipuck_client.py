@@ -33,9 +33,24 @@ def kill_now() -> bool:
     return __kill_now
 
 async def test():
-    async with websockets.connect("ws://pi-puck.local:5000") as websocket:
 
-        while True:
+    while True:
+
+        async with websockets.connect("ws://localhost:6000") as websocket:
+
+            # Construct request for data
+            message = {}
+            message["get_ids"] = True
+
+            # Send request for data and wait for reply
+            await websocket.send(json.dumps(message))
+            reply_json = await websocket.recv()
+            reply = json.loads(reply_json)
+
+            print(reply)
+            
+
+        async with websockets.connect("ws://pi-puck.local:5000") as websocket:
 
             # Turn of LEDs and motors when killed
             if kill_now():
