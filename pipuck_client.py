@@ -56,7 +56,6 @@ battery_charging = False
 battery_voltage = 0
 battery_percentage = 0
 
-# TODO: Refactor connect_to_server and connect_to_robot
 async def connect_to_server():
     loop = asyncio.get_event_loop()
 
@@ -65,6 +64,33 @@ async def connect_to_server():
 
     print("Checking server")
 
+    awake = await check_awake(connection)
+
+    if(awake):
+        print("Server is awake")
+        global server_connection
+        server_connection = connection
+    else:
+        print("Server did not respond")
+
+async def connect_to_robots(ids):
+    loop = asyncio.get_event_loop()
+
+    for id in ids:
+        uri = "ws://pi-puck-" + str(id) + ".local:" + str(robot_port)
+        connection = websockets.connect(uri)
+
+        print("Checking robot:", id)
+
+        awake = await check_awake(connection)
+
+        if(awake):
+            print("Robot is awake:", id)
+            robot_connections[id] = connection # Add to set if successful
+        else:
+            print("Robot did not respond:", id)
+
+async def check_awake(connection):
     awake = False
 
     try:
@@ -83,46 +109,7 @@ async def connect_to_server():
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
-    if(awake):
-        print("Server is awake")
-        global server_connection
-        server_connection = connection
-    else:
-        print("Server did not respond")
-
-async def connect_to_robots(ids):
-    loop = asyncio.get_event_loop()
-
-    for id in ids:
-        uri = "ws://pi-puck-" + str(id) + ".local:" + str(robot_port)
-        connection = websockets.connect(uri)
-
-        print("Checking robot:", id)
-
-        awake = False
-
-        try:
-            async with connection as websocket:
-
-                message = {}
-                message["check_awake"] = True
-
-                # Send request for data and wait for reply
-                await websocket.send(json.dumps(message))
-                reply_json = await websocket.recv()
-                reply = json.loads(reply_json)
-                print(reply)
-                awake = reply["awake"]
-
-        except Exception as e:
-            print(f"{type(e).__name__}: {e}")
-
-        if(awake):
-            print("Robot is awake:", id)
-            robot_connections[id] = connection # Add to set if successful
-        else:
-            print("Robot did not respond:", id)
-
+    return awake
 
 async def get_robot_data(ids):
     await message_robots(ids, subscribe_one)
