@@ -49,7 +49,7 @@ class Camera(threading.Thread):
             (tags, ids, rejected) = cv2.aruco.detectMarkers(frame, cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100), parameters=cv2.aruco.DetectorParameters_create())
 
             self.robot_ids = [] # Clear list every time in case robots have disappeared
-                        
+
             if ids is not None and len(ids.tolist()) > 0:
                 self.robot_ids = ids.tolist()
 
@@ -109,6 +109,7 @@ async def handler(websocket):
             await websocket.send(json.dumps(reply))
 
 
+# TODO: Handle Ctrl+C signals
 if __name__ == "__main__":
     global cam
     cam = Camera()
