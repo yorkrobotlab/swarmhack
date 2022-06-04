@@ -7,6 +7,7 @@ import signal
 import time
 import random
 from itertools import chain
+import sys
 
 import colorama
 from colorama import Fore
@@ -40,10 +41,12 @@ def kill_now() -> bool:
     global __kill_now
     return __kill_now
 
+server_address = "localhost"
 server_port = 6000
 robot_port = 5000
 
-connections = {}
+server_connection = None
+robot_connections = {}
 
 tasks = []
 
@@ -52,6 +55,40 @@ ir_readings = []
 battery_charging = False
 battery_voltage = 0
 battery_percentage = 0
+
+# TODO: Refactor connect_to_server and connect_to_robot
+async def connect_to_server():
+    loop = asyncio.get_event_loop()
+
+    uri = "ws://" + server_address + ":" + str(server_port)
+    connection = websockets.connect(uri)
+
+    print("Checking server")
+
+    awake = False
+
+    try:
+        async with connection as websocket:
+
+            message = {}
+            message["check_awake"] = True
+
+            # Send request for data and wait for reply
+            await websocket.send(json.dumps(message))
+            reply_json = await websocket.recv()
+            reply = json.loads(reply_json)
+            print(reply)
+            awake = reply["awake"]
+
+    except Exception as e:
+        print(f"{type(e).__name__}: {e}")
+
+    if(awake):
+        print("Server is awake")
+        global server_connection
+        server_connection = connection
+    else:
+        print("Server did not respond")
 
 async def connect_to_robots(ids):
     loop = asyncio.get_event_loop()
@@ -82,7 +119,7 @@ async def connect_to_robots(ids):
 
         if(awake):
             print("Robot is awake:", id)
-            connections[id] = connection # Add to set if successful
+            robot_connections[id] = connection # Add to set if successful
         else:
             print("Robot did not respond:", id)
 
@@ -100,7 +137,7 @@ async def stop_robots(ids):
 async def message_robots(ids, function):
     loop = asyncio.get_event_loop()
 
-    for id, connection in connections.items():
+    for id, connection in robot_connections.items():
         if id in ids:
             tasks.append(loop.create_task(function(connection)))
     
@@ -155,9 +192,9 @@ async def subscribe_one(connection):
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
-async def get_server_data(uri):
+async def get_server_data():
     try:
-        async with websockets.connect(uri) as websocket:
+        async with server_connection as websocket:
 
             global ids
             message = {}
@@ -251,37 +288,41 @@ async def publish_one(connection):
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
-# TODO: Keep websocket connections open between subscribe/publish cycles?
-# while True:
 
-loop = asyncio.get_event_loop()
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
 
-robot_ids = [1, 2]
-loop.run_until_complete(connect_to_robots(robot_ids))
+    loop.run_until_complete(connect_to_server())
 
-while True:
+    if server_connection is None:
+        sys.exit(1)
 
-    # TODO: Keep websocket connection to server open permanently as well
-    print(Fore.GREEN + "Requesting data from server")
-    loop.run_until_complete(get_server_data("ws://localhost:6000"))
+    robot_ids = [1, 2] # Specify robots to work with
+    loop.run_until_complete(connect_to_robots(robot_ids))
 
-    print(Fore.GREEN + "Robots detected:", ids)
-    
-    print(Fore.GREEN + "Requesting data from detected robots")
-    loop.run_until_complete(get_robot_data(ids))
+    # Only communicate with robots that were successfully connected to
+    while True:
 
-    # print(Fore.GREEN + "Processing...")
+        print(Fore.GREEN + "Requesting data from server")
+        loop.run_until_complete(get_server_data())
 
-    print(Fore.GREEN + "Sending commands to detected robots")
-    loop.run_until_complete(send_robot_commands(ids))
+        print(Fore.GREEN + "Robots detected:", ids)
+        
+        print(Fore.GREEN + "Requesting data from detected robots")
+        loop.run_until_complete(get_robot_data(ids))
 
-    print()
+        # print(Fore.GREEN + "Processing...")
 
-    # TODO: Close websocket connections
-    if kill_now():
-        loop.run_until_complete(stop_robots(robot_ids)) # Kill all robots, even if not visible
-        break
+        print(Fore.GREEN + "Sending commands to detected robots")
+        loop.run_until_complete(send_robot_commands(ids))
 
-    # Sleep until next control cycle
-    # time.sleep(0.1)
-    
+        print()
+
+        # TODO: Close websocket connections
+        if kill_now():
+            loop.run_until_complete(stop_robots(robot_ids)) # Kill all robots, even if not visible
+            break
+
+        # Sleep until next control cycle
+        # time.sleep(0.1)
+        

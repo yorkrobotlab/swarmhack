@@ -100,6 +100,10 @@ async def handler(websocket):
         reply = {}
         send_reply = False
 
+        if "check_awake" in message:
+            reply["awake"] = True
+            send_reply = True
+
         if "get_ids" in message:
             reply["ids"] = cam.robot_ids
             send_reply = True
