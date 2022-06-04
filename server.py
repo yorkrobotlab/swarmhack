@@ -48,10 +48,12 @@ class Camera(threading.Thread):
             
             (tags, ids, rejected) = cv2.aruco.detectMarkers(frame, cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100), parameters=cv2.aruco.DetectorParameters_create())
 
-            cv2.aruco.drawDetectedMarkers(frame, tags, ids, borderColor = (0, 255, 0))
+            self.robot_ids = [] # Clear list every time in case robots have disappeared
+                        
+            if ids is not None and len(ids.tolist()) > 0:
+                self.robot_ids = ids.tolist()
 
-            # TODO: Handle case when no tags are detected (.tolist error)
-            self.robot_ids = ids.tolist()
+            cv2.aruco.drawDetectedMarkers(frame, tags, ids, borderColor = (0, 255, 0))
 
             for tag in tags:
                 corners = tag.tolist()[0]
