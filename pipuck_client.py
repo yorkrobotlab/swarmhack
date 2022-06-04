@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import asyncio
+from numpy import empty
 import websockets
 import json
 import signal
@@ -267,7 +268,7 @@ async def send_commands(robot):
             elif right < -robot.MAX_SPEED:
                 right = -robot.MAX_SPEED
 
-            left = right = 0
+            # left = right = 0
 
             message["set_motor_speeds"] = {}
             message["set_motor_speeds"]["left"] = left
@@ -286,12 +287,17 @@ if __name__ == "__main__":
     loop.run_until_complete(connect_to_server())
 
     if server_connection is None:
+        print(Fore.RED + "[ERROR]: No connection to server")
         sys.exit(1)
 
     robot_ids = [1, 2] # Specify robots to work with
 
     print(Fore.GREEN + "[INFO]: Connecting to robots")
     loop.run_until_complete(connect_to_robots(robot_ids))
+
+    if not robots:
+        print(Fore.RED + "[ERROR]: No connection to robots")
+        sys.exit(1)
 
     # Only communicate with robots that were successfully connected to
     while True:
