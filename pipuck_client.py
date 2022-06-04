@@ -14,12 +14,6 @@ from colorama import Fore
 
 colorama.init(autoreset = True)
 
-MAX_SPEED = 500
-ir_threshold = 300
-BAT_LOW_VOLTAGE = 3.6
-weights_left = [-10, -10, -5, 0, 0, 5, 10, 10]
-weights_right = [-1 * x for x in weights_left]
-
 # Handle Ctrl+C termination
 
 # https://stackoverflow.com/questions/2148888/python-trap-all-signals
@@ -46,15 +40,25 @@ server_port = 6000
 robot_port = 5000
 
 server_connection = None
-robot_connections = {}
-
-tasks = []
-
+robots = {}
 ids = []
-ir_readings = []
-battery_charging = False
-battery_voltage = 0
-battery_percentage = 0
+
+class Robot:
+
+    BAT_LOW_VOLTAGE = 3.6
+    MAX_SPEED = 500
+    ir_threshold = 300
+    weights_left = [-10, -10, -5, 0, 0, 5, 10, 10]
+    weights_right = [-1 * x for x in weights_left]
+
+    def __init__(self, id, connection):
+        self.id = id
+        self.connection = connection
+
+        self.ir_readings = []
+        self.battery_charging = False
+        self.battery_voltage = 0
+        self.battery_percentage = 0
 
 async def connect_to_server():
     loop = asyncio.get_event_loop()
@@ -62,7 +66,7 @@ async def connect_to_server():
     uri = "ws://" + server_address + ":" + str(server_port)
     connection = websockets.connect(uri)
 
-    print("Checking server")
+    print("Opening connection to server: " + uri)
 
     awake = await check_awake(connection)
 
@@ -80,15 +84,15 @@ async def connect_to_robots(ids):
         uri = "ws://pi-puck-" + str(id) + ".local:" + str(robot_port)
         connection = websockets.connect(uri)
 
-        print("Checking robot:", id)
+        print("Opening connection to robot:", uri)
 
         awake = await check_awake(connection)
 
         if(awake):
-            print("Robot is awake:", id)
-            robot_connections[id] = connection # Add to set if successful
+            print(f"Robot {id} is awake")
+            robots[id] = Robot(id, connection)
         else:
-            print("Robot did not respond:", id)
+            print(f"Robot {id} did not respond")
 
 async def check_awake(connection):
     awake = False
@@ -103,7 +107,7 @@ async def check_awake(connection):
             await websocket.send(json.dumps(message))
             reply_json = await websocket.recv()
             reply = json.loads(reply_json)
-            print(reply)
+
             awake = reply["awake"]
 
     except Exception as e:
@@ -112,10 +116,10 @@ async def check_awake(connection):
     return awake
 
 async def get_robot_data(ids):
-    await message_robots(ids, subscribe_one)
+    await message_robots(ids, get_data)
 
 async def send_robot_commands(ids):
-    await message_robots(ids, publish_one)
+    await message_robots(ids, send_commands)
 
 async def stop_robots(ids):
     await message_robots(ids, stop_robot)
@@ -124,15 +128,36 @@ async def stop_robots(ids):
 async def message_robots(ids, function):
     loop = asyncio.get_event_loop()
 
-    for id, connection in robot_connections.items():
+    tasks = []
+
+    for id, robot in robots.items():
         if id in ids:
-            tasks.append(loop.create_task(function(connection)))
+            tasks.append(loop.create_task(function(robot)))
     
     await asyncio.gather(*tasks)
 
-async def stop_robot(connection):
+async def get_server_data():
     try:
-        async with connection as websocket:
+        async with server_connection as websocket:
+
+            global ids
+            message = {}
+            message["get_ids"] = True
+            
+            # Send request for data and wait for reply
+            await websocket.send(json.dumps(message))
+            reply_json = await websocket.recv()
+            reply = json.loads(reply_json)
+            
+            # TODO: Get server to return IDs in a more sensible format
+            ids = list(chain.from_iterable(reply["ids"]))
+
+    except Exception as e:
+        print(f"{type(e).__name__}: {e}")
+
+async def stop_robot(robot):
+    try:
+        async with robot.connection as websocket:
 
             # Turn of LEDs and motors when killed
             message = {}
@@ -148,9 +173,9 @@ async def stop_robot(connection):
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
-async def subscribe_one(connection):
+async def get_data(robot):
     try:
-        async with connection as websocket:
+        async with robot.connection as websocket:
 
             message = {}
             message["get_ir_reflected"] = True
@@ -162,44 +187,23 @@ async def subscribe_one(connection):
             reply = json.loads(reply_json)
             print(reply)
 
-            global ir_readings
-            global battery_charging
-            global battery_voltage
-            global battery_percentage
+            robot.ir_readings = reply["ir_reflected"]
 
-            ir_readings = reply["ir_reflected"]
+            robot.battery_charging = reply["battery"]["charging"]
+            robot.battery_voltage = reply["battery"]["voltage"]
+            robot.battery_percentage = reply["battery"]["percentage"]
 
-            battery_charging = reply["battery"]["charging"]
-            battery_voltage = reply["battery"]["voltage"]
-            battery_percentage = reply["battery"]["percentage"]
-
-            print(ir_readings)
-            print("{}, {:.2f}V, {:.2f}%" .format("Charging" if battery_charging else "Discharging", battery_voltage, battery_percentage * 100))
+            print(robot.ir_readings)
+            print("{}, {:.2f}V, {:.2f}%" .format("Charging" if robot.battery_charging else "Discharging",
+                                                  robot.battery_voltage,
+                                                  robot.battery_percentage * 100))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
-async def get_server_data():
+async def send_commands(robot):
     try:
-        async with server_connection as websocket:
-
-            global ids
-            message = {}
-            message["get_ids"] = True
-            
-            # Send request for data and wait for reply
-            await websocket.send(json.dumps(message))
-            reply_json = await websocket.recv()
-            reply = json.loads(reply_json)
-            
-            ids = list(chain.from_iterable(reply["ids"]))
-
-    except Exception as e:
-        print(f"{type(e).__name__}: {e}")
-
-async def publish_one(connection):
-    try:
-        async with connection as websocket:
+        async with robot.connection as websocket:
 
             # Turn of LEDs and motors when killed
             if kill_now():
@@ -218,15 +222,15 @@ async def publish_one(connection):
             message = {}
             message["set_outer_leds"] = [0] * 8 # e-puck body LEDs off by default (no obstacles detected)
 
-            left = right = MAX_SPEED / 2
+            left = right = robot.MAX_SPEED / 2
 
-            print("IR readings:", ir_readings)
+            print("IR readings:", robot.ir_readings)
 
-            for i, reading in enumerate(ir_readings):
-                if reading > ir_threshold:
+            for i, reading in enumerate(robot.ir_readings):
+                if reading > robot.ir_threshold:
                     # Set wheel speeds to avoid detected obstacles
-                    left += weights_left[i] * reading
-                    right += weights_right[i] * reading
+                    left += robot.weights_left[i] * reading
+                    right += robot.weights_right[i] * reading
 
                     # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
                     if i in [0, 7]:
@@ -247,21 +251,21 @@ async def publish_one(connection):
                         message["set_outer_leds"][7] = 1
 
             # Set Pi-puck RGB LEDs based on battery voltage
-            if battery_voltage < BAT_LOW_VOLTAGE:
+            if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
                 message["set_leds_colour"] = "red"
             else:
                 message["set_leds_colour"] = "green"
 
             # Clamp wheel speeds between min/max values
-            if left > MAX_SPEED:
-                left = MAX_SPEED
-            elif left < -MAX_SPEED:
-                left = -MAX_SPEED
+            if left > robot.MAX_SPEED:
+                left = robot.MAX_SPEED
+            elif left < -robot.MAX_SPEED:
+                left = -robot.MAX_SPEED
 
-            if right > MAX_SPEED:
-                right = MAX_SPEED
-            elif right < -MAX_SPEED:
-                right = -MAX_SPEED
+            if right > robot.MAX_SPEED:
+                right = robot.MAX_SPEED
+            elif right < -robot.MAX_SPEED:
+                right = -robot.MAX_SPEED
 
             left = right = 0
 
@@ -285,22 +289,24 @@ if __name__ == "__main__":
         sys.exit(1)
 
     robot_ids = [1, 2] # Specify robots to work with
+
+    print(Fore.GREEN + "[INFO]: Connecting to robots")
     loop.run_until_complete(connect_to_robots(robot_ids))
 
     # Only communicate with robots that were successfully connected to
     while True:
 
-        print(Fore.GREEN + "Requesting data from server")
+        print(Fore.GREEN + "[INFO]: Requesting data from server")
         loop.run_until_complete(get_server_data())
 
-        print(Fore.GREEN + "Robots detected:", ids)
+        print(Fore.GREEN + "[INFO]: Robots detected:", ids)
         
-        print(Fore.GREEN + "Requesting data from detected robots")
+        print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
         loop.run_until_complete(get_robot_data(ids))
 
         # print(Fore.GREEN + "Processing...")
 
-        print(Fore.GREEN + "Sending commands to detected robots")
+        print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
         loop.run_until_complete(send_robot_commands(ids))
 
         print()
