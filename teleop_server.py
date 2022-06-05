@@ -17,6 +17,12 @@ async def handler(websocket):
     state = State.START
     robot_id = ""
     valid_robots = [1, 2, 10, 23]
+    forwards = "w"
+    backwards = "s"
+    left = "a"
+    right = "d"
+    stop = " "
+    release = "q"
 
     async for packet in websocket:
         message = json.loads(packet)
@@ -30,7 +36,7 @@ async def handler(websocket):
                 state = State.START
 
             if state == State.START:
-                await send_message(websocket, "\r\nEnter robot ID, then press return: ")
+                await send_message(websocket, f"\r\nEnter robot ID ({valid_robots}), then press return: ")
                 robot_id = ""
                 state = State.SELECT
 
@@ -40,23 +46,37 @@ async def handler(websocket):
                     try:
                         if int(robot_id) in valid_robots:
                             valid = True
-                            await send_message(websocket, "\r\nControlling robot: " + robot_id)
-                            await send_message(websocket, "\r\nDriving controls")
+                            await send_message(websocket, f"\r\nControlling robot ({release} to release): " + robot_id)
+                            await send_message(websocket, f"\r\nControls: Forwards = {forwards}; Backwards = {backwards}; Left = {left}; Right = {right}; Stop = SPACE")
                             state = State.DRIVE
                     except ValueError:
                         pass
 
                     if not valid:
-                        await send_message(websocket, "\r\nInvalid robot ID")
-                        state = State.START
+                        await send_message(websocket, "\r\nInvalid robot ID, try again: ")
+                        robot_id = ""
+                        state = State.SELECT
 
                 else:
                     await send_message(websocket, key)
                     robot_id = robot_id + key
-                    print(robot_id)
 
             elif state == State.DRIVE:
-                await send_message(websocket, "\r\nDriving")
+                if key == release:
+                    await send_message(websocket, "\r\nReleasing control of robot: " + robot_id)
+                    state = State.START
+                elif key == forwards:
+                    await send_message(websocket, "\r\nDriving forwards")
+                elif key == backwards:
+                    await send_message(websocket, "\r\nDriving backwards")
+                elif key == left:
+                    await send_message(websocket, "\r\nTurning left")
+                elif key == right:
+                    await send_message(websocket, "\r\nTurning right")
+                elif key == stop:
+                    await send_message(websocket, "\r\nStopping")
+                else:
+                    await send_message(websocket, "\r\nUnrecognised command")
 
 
 if __name__ == "__main__":
