@@ -79,7 +79,8 @@ def restoreTerminalSettings(old_settings):
 
 
 def on_message(ws, message):
-    print("Printing message: ", message)
+    reply = json.loads(message)
+    print(reply["prompt"], end="\r\n", flush=True)
 
 
 def on_error(ws, error):
@@ -91,26 +92,29 @@ def on_close(ws, close_status_code, close_msg):
 
 
 def on_open(ws):
-    settings = saveTerminalSettings()
-    pub_thread = PublishThread(ws)
+    def run(*args):
+        settings = saveTerminalSettings()
+        pub_thread = PublishThread(ws)
 
-    try:
-        while True:
-            key = getKey(settings)
+        try:
+            while True:
+                key = getKey(settings)
 
-            # Quit if Ctrl+C is pressed
-            if key == '\x03':
-                break
+                # Quit if Ctrl+C is pressed
+                if key == '\x03':
+                    break
 
-            pub_thread.update(key)
+                pub_thread.update(key)
 
-    except Exception as e:
-        print(e)
+        except Exception as e:
+            print(e)
 
-    finally:
-        pub_thread.stop()
-        ws.close()
-        restoreTerminalSettings(settings)
+        finally:
+            pub_thread.stop()
+            ws.close()
+            restoreTerminalSettings(settings)
+
+    threading.Thread(target=run).start()
 
 
 if __name__ == "__main__":
@@ -118,6 +122,7 @@ if __name__ == "__main__":
     host = "ws://localhost:6000/"
 
     webs = websocket.WebSocketApp(host,
+                                  on_open=on_open,
                                   on_message=on_message,
                                   on_error=on_error,
                                   on_close=on_close)
