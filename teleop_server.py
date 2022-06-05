@@ -16,6 +16,7 @@ async def handler(websocket):
 
     state = State.START
     robot_id = ""
+    valid_robots = [1, 2, 10, 23]
 
     async for packet in websocket:
         message = json.loads(packet)
@@ -29,15 +30,26 @@ async def handler(websocket):
                 state = State.START
 
             if state == State.START:
-                # await send_message(websocket, {"prompt": "Type robot ID, followed by hash"})
-                await send_message(websocket, "Enter robot ID, then press return: ")
+                await send_message(websocket, "\r\nEnter robot ID, then press return: ")
                 robot_id = ""
                 state = State.SELECT
 
             elif state == State.SELECT:
                 if key == "\r":
-                    await send_message(websocket, "\r\nSelected robot: " + robot_id)
-                    state = State.DRIVE
+                    # try:
+                    #     id = int(robot_id)
+                    # except ValueError:
+                    #     await send_message(websocket, "\r\nInvalid robot ID")
+                    #     state = State.START
+                    #     break
+
+                    if int(robot_id) in valid_robots:
+                        await send_message(websocket, "\r\nControlling robot: " + robot_id)
+                        await send_message(websocket, "\r\nDriving controls")
+                        state = State.DRIVE
+                    else:
+                        await send_message(websocket, "\r\nInvalid robot ID")
+                        state = State.START
                 else:
                     await send_message(websocket, key)
                     robot_id = robot_id + key
