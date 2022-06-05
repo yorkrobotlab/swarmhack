@@ -36,20 +36,18 @@ async def handler(websocket):
 
             elif state == State.SELECT:
                 if key == "\r":
-                    # try:
-                    #     id = int(robot_id)
-                    # except ValueError:
-                    #     await send_message(websocket, "\r\nInvalid robot ID")
-                    #     state = State.START
-                    #     break
-
-                    if int(robot_id) in valid_robots:
-                        await send_message(websocket, "\r\nControlling robot: " + robot_id)
-                        await send_message(websocket, "\r\nDriving controls")
-                        state = State.DRIVE
-                    else:
+                    try:
+                        if int(robot_id) in valid_robots:
+                            await send_message(websocket, "\r\nControlling robot: " + robot_id)
+                            await send_message(websocket, "\r\nDriving controls")
+                            state = State.DRIVE
+                        else:
+                            await send_message(websocket, "\r\nInvalid robot ID")
+                            state = State.START
+                    except ValueError:
                         await send_message(websocket, "\r\nInvalid robot ID")
                         state = State.START
+
                 else:
                     await send_message(websocket, key)
                     robot_id = robot_id + key
