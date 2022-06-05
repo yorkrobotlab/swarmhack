@@ -124,7 +124,7 @@ def on_open(ws):
 
 if __name__ == "__main__":
 
-    host = "ws://localhost:6000/"
+    host = "ws://localhost:7000/"
 
     webs = websocket.WebSocketApp(host,
                                   on_open=on_open,

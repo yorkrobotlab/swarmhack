@@ -9,6 +9,7 @@ import time
 import random
 from itertools import chain
 import sys
+from enum import Enum
 
 import colorama
 from colorama import Fore
@@ -44,6 +45,13 @@ server_connection = None
 robots = {}
 ids = []
 
+class RobotState(Enum):
+    FORWARDS = 1
+    BACKWARDS = 2
+    LEFT = 3
+    RIGHT = 4
+    STOP = 5
+
 class Robot:
 
     BAT_LOW_VOLTAGE = 3.6
@@ -56,6 +64,8 @@ class Robot:
         self.id = id
         self.connection = connection
 
+        self.teleop = False
+        self.state = RobotState.STOP
         self.ir_readings = []
         self.battery_charging = False
         self.battery_voltage = 0
@@ -186,7 +196,7 @@ async def get_data(robot):
             await websocket.send(json.dumps(message))
             reply_json = await websocket.recv()
             reply = json.loads(reply_json)
-            print(reply)
+            # print(reply)
 
             robot.ir_readings = reply["ir_reflected"]
 
@@ -194,10 +204,11 @@ async def get_data(robot):
             robot.battery_voltage = reply["battery"]["voltage"]
             robot.battery_percentage = reply["battery"]["percentage"]
 
-            print(robot.ir_readings)
-            print("{}, {:.2f}V, {:.2f}%" .format("Charging" if robot.battery_charging else "Discharging",
-                                                  robot.battery_voltage,
-                                                  robot.battery_percentage * 100))
+            print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
+            print("[Robot {}] Battery: {}, {:.2f}V, {:.2f}%" .format(robot.id,
+                                                              "Charging" if robot.battery_charging else "Discharging",
+                                                              robot.battery_voltage,
+                                                              robot.battery_percentage * 100))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -216,57 +227,68 @@ async def send_commands(robot):
                 message["set_motor_speeds"]["right"] = 0
                 await websocket.send(json.dumps(message))
 
-            # message = {}
-            # message["set_leds_colour"] = random.choice(['red', 'yellow', 'green', 'cyan', 'blue', 'magenta'])
-
             # Construct command message
             message = {}
-            message["set_outer_leds"] = [0] * 8 # e-puck body LEDs off by default (no obstacles detected)
 
-            left = right = robot.MAX_SPEED / 2
+            if robot.teleop:
+                message["set_leds_colour"] = "blue"
+                if robot.state == RobotState.FORWARDS:
+                    left = right = robot.MAX_SPEED
+                elif robot.state == RobotState.BACKWARDS:
+                    left = right = -robot.MAX_SPEED
+                elif robot.state == RobotState.LEFT:
+                    left = -robot.MAX_SPEED
+                    right = robot.MAX_SPEED
+                elif robot.state == RobotState.RIGHT:
+                    left = robot.MAX_SPEED
+                    right = -robot.MAX_SPEED
+                elif robot.state == RobotState.STOP:
+                    left = right = 0
+            else: # Autonomous mode
+                message["set_outer_leds"] = [0] * 8 # e-puck body LEDs off by default (no obstacles detected)
 
-            print("IR readings:", robot.ir_readings)
+                left = right = robot.MAX_SPEED / 2
 
-            for i, reading in enumerate(robot.ir_readings):
-                if reading > robot.ir_threshold:
-                    # Set wheel speeds to avoid detected obstacles
-                    left += robot.weights_left[i] * reading
-                    right += robot.weights_right[i] * reading
+                for i, reading in enumerate(robot.ir_readings):
+                    if reading > robot.ir_threshold:
+                        # Set wheel speeds to avoid detected obstacles
+                        left += robot.weights_left[i] * reading
+                        right += robot.weights_right[i] * reading
 
-                    # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
-                    if i in [0, 7]:
-                        message["set_outer_leds"][0] = 1
-                    elif i == 1:
-                        message["set_outer_leds"][1] = 1
-                    elif i == 2:
-                        message["set_outer_leds"][2] = 1
-                    elif i == 3:
-                        message["set_outer_leds"][3] = 1
-                        message["set_outer_leds"][4] = 1
-                    elif i == 4:
-                        message["set_outer_leds"][4] = 1
-                        message["set_outer_leds"][5] = 1
-                    elif i == 5:
-                        message["set_outer_leds"][6] = 1
-                    elif i == 6:
-                        message["set_outer_leds"][7] = 1
+                        # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
+                        if i in [0, 7]:
+                            message["set_outer_leds"][0] = 1
+                        elif i == 1:
+                            message["set_outer_leds"][1] = 1
+                        elif i == 2:
+                            message["set_outer_leds"][2] = 1
+                        elif i == 3:
+                            message["set_outer_leds"][3] = 1
+                            message["set_outer_leds"][4] = 1
+                        elif i == 4:
+                            message["set_outer_leds"][4] = 1
+                            message["set_outer_leds"][5] = 1
+                        elif i == 5:
+                            message["set_outer_leds"][6] = 1
+                        elif i == 6:
+                            message["set_outer_leds"][7] = 1
 
-            # Set Pi-puck RGB LEDs based on battery voltage
-            if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
-                message["set_leds_colour"] = "red"
-            else:
-                message["set_leds_colour"] = "green"
+                # Set Pi-puck RGB LEDs based on battery voltage
+                if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
+                    message["set_leds_colour"] = "red"
+                else:
+                    message["set_leds_colour"] = "green"
 
-            # Clamp wheel speeds between min/max values
-            if left > robot.MAX_SPEED:
-                left = robot.MAX_SPEED
-            elif left < -robot.MAX_SPEED:
-                left = -robot.MAX_SPEED
+                # Clamp wheel speeds between min/max values
+                if left > robot.MAX_SPEED:
+                    left = robot.MAX_SPEED
+                elif left < -robot.MAX_SPEED:
+                    left = -robot.MAX_SPEED
 
-            if right > robot.MAX_SPEED:
-                right = robot.MAX_SPEED
-            elif right < -robot.MAX_SPEED:
-                right = -robot.MAX_SPEED
+                if right > robot.MAX_SPEED:
+                    right = robot.MAX_SPEED
+                elif right < -robot.MAX_SPEED:
+                    right = -robot.MAX_SPEED
 
             # left = right = 0
 
@@ -279,6 +301,97 @@ async def send_commands(robot):
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
+
+
+class MenuState(Enum):
+    START = 1
+    SELECT = 2
+    DRIVE = 3
+
+async def send_message(websocket, message):
+    await websocket.send(json.dumps({"prompt": message}))
+
+
+async def handler(websocket):
+
+    state = MenuState.START
+    robot_id = ""
+    valid_robots = list(robots.keys())
+    forwards = "w"
+    backwards = "s"
+    left = "a"
+    right = "d"
+    stop = " "
+    release = "q"
+
+    async for packet in websocket:
+        message = json.loads(packet)
+        # print(message)
+
+        if "key" in message:
+
+            key = message["key"]
+
+            if key == "teleop_start":
+                state = MenuState.START
+
+            if key == "teleop_stop":
+                if state == MenuState.DRIVE:
+                    id = int(robot_id)
+                    robots[id].teleop = False
+                    robots[id].state = RobotState.STOP
+
+            if state == MenuState.START:
+                await send_message(websocket, f"\r\nEnter robot ID ({valid_robots}), then press return: ")
+                robot_id = ""
+                state = MenuState.SELECT
+
+            elif state == MenuState.SELECT:
+                if key == "\r":
+                    valid = False
+                    try:
+                        if int(robot_id) in valid_robots:
+                            valid = True
+                            await send_message(websocket, f"\r\nControlling robot ({release} to release): " + robot_id)
+                            await send_message(websocket, f"\r\nControls: Forwards = {forwards}; Backwards = {backwards}; Left = {left}; Right = {right}; Stop = SPACE")
+                            robots[int(robot_id)].teleop = True
+                            state = MenuState.DRIVE
+                    except ValueError:
+                        pass
+
+                    if not valid:
+                        await send_message(websocket, "\r\nInvalid robot ID, try again: ")
+                        robot_id = ""
+                        state = MenuState.SELECT
+
+                else:
+                    await send_message(websocket, key)
+                    robot_id = robot_id + key
+
+            elif state == MenuState.DRIVE:
+                id = int(robot_id)
+                if key == release:
+                    await send_message(websocket, "\r\nReleasing control of robot: " + robot_id)
+                    robots[id].teleop = False
+                    robots[id].state = RobotState.STOP
+                    state = MenuState.START
+                elif key == forwards:
+                    await send_message(websocket, "\r\nDriving forwards")
+                    robots[id].state = RobotState.FORWARDS
+                elif key == backwards:
+                    await send_message(websocket, "\r\nDriving backwards")
+                    robots[id].state = RobotState.BACKWARDS
+                elif key == left:
+                    await send_message(websocket, "\r\nTurning left")
+                    robots[id].state = RobotState.LEFT
+                elif key == right:
+                    await send_message(websocket, "\r\nTurning right")
+                    robots[id].state = RobotState.RIGHT
+                elif key == stop:
+                    await send_message(websocket, "\r\nStopping")
+                    robots[id].state = RobotState.STOP
+                else:
+                    await send_message(websocket, "\r\nUnrecognised command")
 
 
 if __name__ == "__main__":
@@ -298,6 +411,11 @@ if __name__ == "__main__":
     if not robots:
         print(Fore.RED + "[ERROR]: No connection to robots")
         sys.exit(1)
+
+    # Listen for keyboard input from teleop websocket client
+    print(Fore.GREEN + "[INFO]: Starting teleop server")
+    start_server = websockets.serve(ws_handler=handler, host=None, port=7000, ping_interval=None, ping_timeout=None)
+    loop.run_until_complete(start_server)
 
     # Only communicate with robots that were successfully connected to
     while True:

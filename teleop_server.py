@@ -80,7 +80,7 @@ async def handler(websocket):
 
 
 if __name__ == "__main__":
-    start_server = websockets.serve(ws_handler=handler, host=None, port=6000, ping_interval=None, ping_timeout=None)
+    start_server = websockets.serve(ws_handler=handler, host=None, port=7000, ping_interval=None, ping_timeout=None)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(start_server)
     loop.run_forever()
