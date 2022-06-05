@@ -35,7 +35,7 @@ class PublishThread(threading.Thread):
 
     def stop(self):
         self.done = True
-        self.update("teleop_exit") # Publish stop message when thread exits
+        self.update("teleop_stop") # Publish stop message when thread exits
         self.join()
 
     def run(self):
@@ -80,14 +80,17 @@ def restoreTerminalSettings(old_settings):
 
 def on_message(ws, message):
     reply = json.loads(message)
-    print(reply["prompt"], end="\r\n", flush=True)
+    if "prompt" in reply:
+        print(reply["prompt"], end='', flush=True)
 
 
 def on_error(ws, error):
+    print()
     print("Websocket error:", error)
 
 
 def on_close(ws, close_status_code, close_msg):
+    print()
     print("Closing websocket")
 
 
@@ -97,6 +100,8 @@ def on_open(ws):
         pub_thread = PublishThread(ws)
 
         try:
+            pub_thread.update("teleop_start")
+
             while True:
                 key = getKey(settings)
 
