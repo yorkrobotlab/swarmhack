@@ -75,7 +75,7 @@ cv2.aruco.drawMarker(arucoDict, args["id"], tag_size, tag, 1)
 
 image = np.ones((width, height, 1), dtype="uint8") * 255 # Blank white background
 
-# Overlay genrated tag in centre of image
+# Overlay generated tag in centre of image
 x = int(width/2 - tag_size/2)
 y = int(height/2 - tag_size/2)
 image[x:x+tag.shape[0], y:y+tag.shape[1], :] = tag
@@ -84,8 +84,16 @@ centre_coordinates = (int(height/2), int(width/2))
 colour = (0, 0, 0) # Black circle and text
 thickness = 5
 
-# Draw circle of specified diameter
-image = cv2.circle(image, centre_coordinates, int(circle_radius * 0.99), colour, thickness, lineType=cv2.LINE_AA)
+if id == 0:
+	scale = 0.95
+	centre_x = int(width/2)
+	centre_y = int(height/2)
+	top_left = (centre_x - int(width/2 * scale), centre_y - int(height/2 * scale))
+	bottom_right = (centre_x + int(width/2 * scale), centre_y + int(height/2 * scale))
+	image = cv2.rectangle(image, top_left, bottom_right, colour, thickness, lineType=cv2.LINE_AA)
+else:
+	# Draw circle of specified diameter
+	image = cv2.circle(image, centre_coordinates, int(circle_radius * 0.99), colour, thickness, lineType=cv2.LINE_AA)
 
 # Draw tag ID at top of tag (forward direction of robot)
 text = str(id)
