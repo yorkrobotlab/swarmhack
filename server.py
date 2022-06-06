@@ -6,6 +6,7 @@ import threading
 import asyncio
 import websockets
 import json
+from camera import *
 
 class coord:
     """Co-ordinate class to  make handling points easier"""
@@ -20,31 +21,15 @@ class coord:
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y
 
-class Camera(threading.Thread):
+class Tracker(threading.Thread):
 
     def __init__(self):
-
         threading.Thread.__init__(self)
-
-        self.cap = cv2.VideoCapture(0)
-
-        if not self.cap.isOpened():
-            print("Cannot open camera")
-            exit()
-
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920) # Change to 4096 for 4k resolution
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080) # Change to 2160 for 4k resolution
-        self.cap.set(cv2.CAP_PROP_FPS, 30)
+        self.camera = Camera()
 
     def run(self):
-
-        while True:
-        
-            ret, frame = self.cap.read()
-        
-            if not ret:
-                print("Can't receive frame (stream end?). Exiting ...")
-                break
+        while True:        
+            frame = self.camera.get_frame()
             
             (tags, ids, rejected) = cv2.aruco.detectMarkers(frame, cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100), parameters=cv2.aruco.DetectorParameters_create())
 
@@ -115,9 +100,9 @@ async def handler(websocket):
 
 # TODO: Handle Ctrl+C signals
 if __name__ == "__main__":
-    global cam
-    cam = Camera()
-    cam.start()
+    global tracker
+    tracker = Tracker()
+    tracker.start()
     
     start_server = websockets.serve(ws_handler=handler, host=None, port=6000)
     loop = asyncio.get_event_loop()

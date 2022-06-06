@@ -441,5 +441,5 @@ if __name__ == "__main__":
             break
 
         # Sleep until next control cycle
-        # time.sleep(0.1)
+        time.sleep(0.1)
         
