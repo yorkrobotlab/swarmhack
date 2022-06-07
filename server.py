@@ -36,6 +36,11 @@ class Tracker(threading.Thread):
     def __init__(self):
         threading.Thread.__init__(self)
         self.camera = Camera()
+        self.calibrated = False
+        self.min_x = 0
+        self.min_y = 0
+        self.max_x = 0
+        self.max_y = 0
 
     def run(self):
         while True:        
@@ -46,12 +51,14 @@ class Tracker(threading.Thread):
 
             (raw_tags, tag_ids, rejected) = cv2.aruco.detectMarkers(image, aruco_dictionary, parameters=aruco_parameters)
 
-            # self.robot_ids = [] # Clear list every time in case robots have disappeared
+            self.robot_ids = [] # Clear list every time in case robots have disappeared
 
             # if tag_ids is not None and len(tag_ids.tolist()) > 0:
             #     self.robot_ids = tag_ids.tolist()
 
             if tag_ids is not None and len(tag_ids.tolist()) > 0:
+
+                self.robot_ids = tag_ids.tolist()
 
                 tag_ids = list(itertools.chain(*tag_ids))
                 tags = []
@@ -88,36 +95,36 @@ class Tracker(threading.Thread):
                     position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
                     cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
-                # Detect corners of arena
-                min_x = min_y = max_x = max_y = 0
-                first_corner = True
-                num_corners = 0
+                # Only calibrate the first time two corner tags are detected
+                if not self.calibrated:
 
-                for tag in tags:
-                    if tag.id == 0:
-                        num_corners = num_corners + 1
-                        if first_corner:
-                            min_x = tag.centre.x
-                            max_x = tag.centre.x
-                            min_y = tag.centre.y
-                            max_y = tag.centre.y
-                            first_corner = False
-                        else:
-                            if tag.centre.x < min_x:
-                                min_x = tag.centre.x
-                            if tag.centre.x > max_x:
-                                max_x = tag.centre.x
-                            if tag.centre.y < min_y:
-                                min_y = tag.centre.y
-                            if tag.centre.y > max_y:
-                                max_y = tag.centre.y
+                    num_corners = 0
 
-                print(min_x, min_y, max_x, max_y)
-                cv2.rectangle(image, (min_x, min_y), (max_x, max_y), green, 1, lineType=cv2.LINE_AA)
+                    for tag in tags:
+                        if tag.id == 0:
+                            if num_corners == 0:
+                                self.min_x = tag.centre.x
+                                self.max_x = tag.centre.x
+                                self.min_y = tag.centre.y
+                                self.max_y = tag.centre.y
+                            else:
+                                self.calibrated = True
+                                if tag.centre.x < self.min_x:
+                                    self.min_x = tag.centre.x
+                                if tag.centre.x > self.max_x:
+                                    self.max_x = tag.centre.x
+                                if tag.centre.y < self.min_y:
+                                    self.min_y = tag.centre.y
+                                if tag.centre.y > self.max_y:
+                                    self.max_y = tag.centre.y
+                            num_corners = num_corners + 1
+
+                print(self.min_x, self.min_y, self.max_x, self.max_y)
+                cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
 
                 if num_corners == 2:
                     corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
-                    corner_distance_pixels = math.dist([min_x, min_y], [max_x, max_y]) # Euclidean distance between corner tags in pixels
+                    corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x, self.max_y]) # Euclidean distance between corner tags in pixels
                     scale_factor = corner_distance_pixels / corner_distance_metres
 
                     sensor_range = int(0.3 * scale_factor) # 30cm sensing radius
@@ -127,7 +134,7 @@ class Tracker(threading.Thread):
                             cv2.circle(image, (tag.centre.x, tag.centre.y), sensor_range, magenta, 2, lineType=cv2.LINE_AA)
 
                             for other_tag in tags:
-                                if tag.id != other_tag.id:
+                                if tag.id != other_tag.id and other_tag.id != 0:
                                     if math.dist([tag.centre.x, tag.centre.y], [other_tag.centre.x, other_tag.centre.y]) < sensor_range:
                                         cv2.line(image, (tag.centre.x, tag.centre.y), (other_tag.centre.x, other_tag.centre.y), cyan, 2, lineType=cv2.LINE_AA)
 
@@ -159,7 +166,7 @@ async def handler(websocket):
             send_reply = True
 
         if "get_ids" in message:
-            reply["ids"] = cam.robot_ids
+            reply["ids"] = tracker.robot_ids
             send_reply = True
 
         # Send reply, if requested
