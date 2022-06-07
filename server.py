@@ -122,6 +122,8 @@ class Tracker(threading.Thread):
                 print(self.min_x, self.min_y, self.max_x, self.max_y)
                 cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
 
+                overlay = image.copy()
+
                 if num_corners == 2:
                     corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
                     corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x, self.max_y]) # Euclidean distance between corner tags in pixels
@@ -131,13 +133,16 @@ class Tracker(threading.Thread):
 
                     for tag in tags:
                         if tag.id > 0:
-                            cv2.circle(image, (tag.centre.x, tag.centre.y), sensor_range, magenta, 2, lineType=cv2.LINE_AA)
+                            cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range, magenta, -1, lineType=cv2.LINE_AA)
 
                             for other_tag in tags:
                                 if tag.id != other_tag.id and other_tag.id != 0:
                                     if math.dist([tag.centre.x, tag.centre.y], [other_tag.centre.x, other_tag.centre.y]) < sensor_range:
                                         cv2.line(image, (tag.centre.x, tag.centre.y), (other_tag.centre.x, other_tag.centre.y), cyan, 2, lineType=cv2.LINE_AA)
 
+            # Transparency for overlaid augments
+            alpha = 0.3
+            image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
 
             window_name = 'SwarmHack'
 
