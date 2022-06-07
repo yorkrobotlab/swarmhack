@@ -65,18 +65,19 @@ class Tracker(threading.Thread):
                     red = (0, 0, 255)
                     green = (0, 255, 0)
                     magenta = (255, 0, 255)
+                    cyan = (255, 255, 0)
 
                     # Draw border of tag
-                    cv2.line(image, (tag.tl.x, tag.tl.y), (tag.tr.x, tag.tr.y), green, 1)
-                    cv2.line(image, (tag.tr.x, tag.tr.y), (tag.br.x, tag.br.y), green, 1)
-                    cv2.line(image, (tag.br.x, tag.br.y), (tag.bl.x, tag.bl.y), green, 1)
-                    cv2.line(image, (tag.bl.x, tag.bl.y), (tag.tl.x, tag.tl.y), green, 1)
+                    cv2.line(image, (tag.tl.x, tag.tl.y), (tag.tr.x, tag.tr.y), green, 1, lineType=cv2.LINE_AA)
+                    cv2.line(image, (tag.tr.x, tag.tr.y), (tag.br.x, tag.br.y), green, 1, lineType=cv2.LINE_AA)
+                    cv2.line(image, (tag.br.x, tag.br.y), (tag.bl.x, tag.bl.y), green, 1, lineType=cv2.LINE_AA)
+                    cv2.line(image, (tag.bl.x, tag.bl.y), (tag.tl.x, tag.tl.y), green, 1, lineType=cv2.LINE_AA)
                     
                     # Draw circle on centre point
-                    cv2.circle(image, (tag.centre.x, tag.centre.y), 5, red, -1)
+                    cv2.circle(image, (tag.centre.x, tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
 
                     # Draw line from centre point to front of tag
-                    cv2.line(image, (tag.centre.x, tag.centre.y), (tag.front.x, tag.front.y), red, 2)
+                    cv2.line(image, (tag.centre.x, tag.centre.y), (tag.front.x, tag.front.y), red, 2, lineType=cv2.LINE_AA)
 
                     # Draw tag ID
                     text = str(tag.id)
@@ -112,17 +113,23 @@ class Tracker(threading.Thread):
                                 max_y = tag.centre.y
 
                 print(min_x, min_y, max_x, max_y)
-                cv2.rectangle(image, (min_x, min_y), (max_x, max_y), green, 1)
+                cv2.rectangle(image, (min_x, min_y), (max_x, max_y), green, 1, lineType=cv2.LINE_AA)
 
                 if num_corners == 2:
                     corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
                     corner_distance_pixels = math.dist([min_x, min_y], [max_x, max_y]) # Euclidean distance between corner tags in pixels
-                    print(corner_distance_pixels)
-
                     scale_factor = corner_distance_pixels / corner_distance_metres
-                    print(scale_factor)
 
-                    cv2.circle(image, (int(max_x/2), int(max_y/2)), int(0.035 * scale_factor), red, -1) # Circle radius of e-puck as test
+                    sensor_range = int(0.3 * scale_factor) # 30cm sensing radius
+
+                    for tag in tags:
+                        if tag.id > 0:
+                            cv2.circle(image, (tag.centre.x, tag.centre.y), sensor_range, magenta, 2, lineType=cv2.LINE_AA)
+
+                            for other_tag in tags:
+                                if tag.id != other_tag.id:
+                                    if math.dist([tag.centre.x, tag.centre.y], [other_tag.centre.x, other_tag.centre.y]) < sensor_range:
+                                        cv2.line(image, (tag.centre.x, tag.centre.y), (other_tag.centre.x, other_tag.centre.y), cyan, 2, lineType=cv2.LINE_AA)
 
 
             window_name = 'SwarmHack'
