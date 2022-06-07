@@ -90,9 +90,11 @@ class Tracker(threading.Thread):
                 # Detect corners of arena
                 min_x = min_y = max_x = max_y = 0
                 first_corner = True
+                num_corners = 0
 
                 for tag in tags:
                     if tag.id == 0:
+                        num_corners = num_corners + 1
                         if first_corner:
                             min_x = tag.centre.x
                             max_x = tag.centre.x
@@ -111,6 +113,16 @@ class Tracker(threading.Thread):
 
                 print(min_x, min_y, max_x, max_y)
                 cv2.rectangle(image, (min_x, min_y), (max_x, max_y), green, 1)
+
+                if num_corners == 2:
+                    corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
+                    corner_distance_pixels = math.dist([min_x, min_y], [max_x, max_y]) # Euclidean distance between corner tags in pixels
+                    print(corner_distance_pixels)
+
+                    scale_factor = corner_distance_pixels / corner_distance_metres
+                    print(scale_factor)
+
+                    cv2.circle(image, (int(max_x/2), int(max_y/2)), int(0.035 * scale_factor), red, -1) # Circle radius of e-puck as test
 
 
             window_name = 'SwarmHack'
