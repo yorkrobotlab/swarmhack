@@ -87,6 +87,32 @@ class Tracker(threading.Thread):
                     position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
                     cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
+                # Detect corners of arena
+                min_x = min_y = max_x = max_y = 0
+                first_corner = True
+
+                for tag in tags:
+                    if tag.id == 0:
+                        if first_corner:
+                            min_x = tag.centre.x
+                            max_x = tag.centre.x
+                            min_y = tag.centre.y
+                            max_y = tag.centre.y
+                            first_corner = False
+                        else:
+                            if tag.centre.x < min_x:
+                                min_x = tag.centre.x
+                            if tag.centre.x > max_x:
+                                max_x = tag.centre.x
+                            if tag.centre.y < min_y:
+                                min_y = tag.centre.y
+                            if tag.centre.y > max_y:
+                                max_y = tag.centre.y
+
+                print(min_x, min_y, max_x, max_y)
+                cv2.rectangle(image, (min_x, min_y), (max_x, max_y), green, 1)
+
+
             window_name = 'SwarmHack'
 
             # screen = screeninfo.get_monitors()[0]
