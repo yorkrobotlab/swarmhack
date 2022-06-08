@@ -40,6 +40,7 @@ class Robot:
         self.tag = tag
         self.id = tag.id
         self.position = tag.centre
+        self.sensor_range = 0.3 # 30cm sensing radius
 
 
 class Tracker(threading.Thread):
@@ -53,6 +54,9 @@ class Tracker(threading.Thread):
         self.min_y = 0
         self.max_x = 0
         self.max_y = 0
+        self.corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
+        self.corner_distance_pixels = 0
+        self.scale_factor = 0
         self.robots = {}
 
     def run(self):
@@ -100,11 +104,8 @@ class Tracker(threading.Thread):
                                 if tag.centre.y > self.max_y:
                                     self.max_y = tag.centre.y
 
-                                corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
-                                corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x, self.max_y]) # Euclidean distance between corner tags in pixels
-                                scale_factor = corner_distance_pixels / corner_distance_metres
-                                sensor_range = int(0.3 * scale_factor) # 30cm sensing radius
-
+                                self.corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x, self.max_y]) # Euclidean distance between corner tags in pixels
+                                self.scale_factor = self.corner_distance_pixels / self.corner_distance_metres
                                 self.calibrated = True
 
                             self.num_corner_tags = self.num_corner_tags + 1
@@ -114,7 +115,7 @@ class Tracker(threading.Thread):
                     # Draw boundary of virtual environment based on corner tag positions
                     cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 5, lineType=cv2.LINE_AA)
             
-                    # Rendering
+                    # Draw robots
                     for id, robot in self.robots.items():
                         tag = robot.tag
 
@@ -140,6 +141,7 @@ class Tracker(threading.Thread):
                         cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
                         # Draw robot's sensor range
+                        sensor_range = int(robot.sensor_range * self.scale_factor)
                         cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range, magenta, -1, lineType=cv2.LINE_AA)
 
                         # Draw lines between robots if they are within sensor range
