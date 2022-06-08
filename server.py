@@ -35,14 +35,23 @@ class Tag:
         self.front = Vector2D(int((self.tl.x + self.tr.x) / 2),
                               int((self.tl.y + self.tr.y) / 2))
 
+        # Calculate orientation of tag
+        self.angle = math.degrees(math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x)) # Angle between forward vector and x-axis
+
 class Robot:
     def __init__(self, tag, position):
         self.tag = tag
         self.id = tag.id
         self.position = position
+        self.orientation = tag.angle
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
 
+class SensorReading:
+    def __init__(self, range, bearing, orientation):
+        self.range = range
+        self.bearing = bearing
+        self.orientation = orientation
 
 class Tracker(threading.Thread):
 
@@ -124,10 +133,11 @@ class Tracker(threading.Thread):
 
                             if id != other_id: # Don't check this robot against itself
 
-                                distance = math.dist([robot.position.x, robot.position.y], [other_robot.position.x, other_robot.position.y])
+                                range = math.dist([robot.position.x, robot.position.y], [other_robot.position.x, other_robot.position.y])
 
-                                if distance < robot.sensor_range:
-                                    robot.neighbours[other_id] = other_robot
+                                if range < robot.sensor_range:
+                                    bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
+                                    robot.neighbours[other_id] = SensorReading(range, bearing, other_robot.orientation)
 
                         # Draw tag
                         tag = robot.tag
@@ -158,7 +168,8 @@ class Tracker(threading.Thread):
                         cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
 
                         # Draw lines between robots if they are within sensor range
-                        for neighbour_id, neighbour in robot.neighbours.items():
+                        for neighbour_id in robot.neighbours.keys():
+                            neighbour = self.robots[neighbour_id]
                             cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 2, lineType=cv2.LINE_AA)
 
                     # Transparency for overlaid augments
