@@ -160,8 +160,24 @@ async def get_server_data():
             reply_json = await websocket.recv()
             reply = json.loads(reply_json)
             
-            # TODO: Get server to return IDs in a more sensible format
-            ids = list(chain.from_iterable(reply["ids"]))
+            ids = reply["ids"]
+
+            for id in ids:
+                message = {}
+                message["get_robot"] = id
+                
+                # Send request for data and wait for reply
+                await websocket.send(json.dumps(message))
+                reply_json = await websocket.recv()
+                reply = json.loads(reply_json)
+
+                orientation = reply["orientation"]
+                neighbours = reply["neighbours"]
+
+                print(f"Robot {id}")
+                print(f"Orientation: {orientation}")
+                print(f"Neighbours = {neighbours}")
+                print()
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -405,12 +421,12 @@ if __name__ == "__main__":
 
     robot_ids = [1, 2] # Specify robots to work with
 
-    print(Fore.GREEN + "[INFO]: Connecting to robots")
-    loop.run_until_complete(connect_to_robots(robot_ids))
+    # print(Fore.GREEN + "[INFO]: Connecting to robots")
+    # loop.run_until_complete(connect_to_robots(robot_ids))
 
-    if not robots:
-        print(Fore.RED + "[ERROR]: No connection to robots")
-        sys.exit(1)
+    # if not robots:
+    #     print(Fore.RED + "[ERROR]: No connection to robots")
+    #     sys.exit(1)
 
     # Listen for keyboard input from teleop websocket client
     print(Fore.GREEN + "[INFO]: Starting teleop server")
@@ -423,15 +439,15 @@ if __name__ == "__main__":
         print(Fore.GREEN + "[INFO]: Requesting data from server")
         loop.run_until_complete(get_server_data())
 
-        print(Fore.GREEN + "[INFO]: Robots detected:", ids)
+        # print(Fore.GREEN + "[INFO]: Robots detected:", ids)
         
-        print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
-        loop.run_until_complete(get_robot_data(ids))
+        # print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
+        # loop.run_until_complete(get_robot_data(ids))
 
-        # print(Fore.GREEN + "Processing...")
+        # # print(Fore.GREEN + "Processing...")
 
-        print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
-        loop.run_until_complete(send_robot_commands(ids))
+        # print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
+        # loop.run_until_complete(send_robot_commands(ids))
 
         print()
 

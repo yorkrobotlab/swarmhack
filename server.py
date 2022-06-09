@@ -85,6 +85,7 @@ class Tracker(threading.Thread):
             if tag_ids is not None and len(tag_ids.tolist()) > 0:
 
                 tag_ids = list(itertools.chain(*tag_ids))
+                tag_ids = [int(id) for id in tag_ids] # Convert from numpy.int32 to int
 
                 # Process raw ArUco output
                 for id, raw_tag in zip(tag_ids, raw_tags):
@@ -203,7 +204,20 @@ async def handler(websocket):
             send_reply = True
 
         if "get_ids" in message:
-            reply["ids"] = tracker.robots.keys()
+            reply["ids"] = list(tracker.robots.keys())
+            send_reply = True
+
+        if "get_robot" in message:
+            id = message["get_robot"]
+            reply["orientation"] = tracker.robots[id].orientation
+            reply["neighbours"] = {}
+
+            for neighbour_id, neighbour in tracker.robots[id].neighbours.items():
+                reply["neighbours"][neighbour_id] = {}
+                reply["neighbours"][neighbour_id]["range"] = neighbour.range
+                reply["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
+                reply["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
+
             send_reply = True
 
         # Send reply, if requested
