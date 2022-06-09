@@ -220,6 +220,21 @@ async def handler(websocket):
 
             send_reply = True
 
+        if "get_robots" in message:
+
+            for id, robot in tracker.robots.items():
+                reply[id] = {}
+                reply[id]["orientation"] = robot.orientation
+                reply[id]["neighbours"] = {}
+
+                for neighbour_id, neighbour in robot.neighbours.items():
+                    reply[id]["neighbours"][neighbour_id] = {}
+                    reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
+                    reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
+                    reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
+
+            send_reply = True
+
         # Send reply, if requested
         if send_reply:
             await websocket.send(json.dumps(reply))

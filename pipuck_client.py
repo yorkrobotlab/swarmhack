@@ -60,9 +60,12 @@ class Robot:
     weights_left = [-10, -10, -5, 0, 0, 5, 10, 10]
     weights_right = [-1 * x for x in weights_left]
 
-    def __init__(self, id, connection):
+    def __init__(self, id):
         self.id = id
-        self.connection = connection
+        self.connection = None
+
+        self.orientation = 0
+        self.neighbours = {}
 
         self.teleop = False
         self.state = RobotState.STOP
@@ -101,7 +104,7 @@ async def connect_to_robots(ids):
 
         if(awake):
             print(f"Robot {id} is awake")
-            robots[id] = Robot(id, connection)
+            robots[id].connection = connection
         else:
             print(f"Robot {id} did not respond")
 
@@ -153,34 +156,33 @@ async def get_server_data():
 
             global ids
             message = {}
-            message["get_ids"] = True
+            message["get_robots"] = True
             
             # Send request for data and wait for reply
             await websocket.send(json.dumps(message))
             reply_json = await websocket.recv()
             reply = json.loads(reply_json)
-            
-            ids = reply["ids"]
 
-            for id in ids:
-                message = {}
-                message["get_robot"] = id
+            ids = list(reply.keys())
+            ids = [int(id) for id in ids]
+
+            for id, robot in reply.items():
+
+                id = int(id) # ID is sent as an integer - why is this necessary?
+
+                if id in robots.keys(): # Filter based on robots of interest
+
+                    robots[id].orientation = robot["orientation"]
+                    robots[id].neighbours = robot["neighbours"]
                 
-                # Send request for data and wait for reply
-                await websocket.send(json.dumps(message))
-                reply_json = await websocket.recv()
-                reply = json.loads(reply_json)
-
-                orientation = reply["orientation"]
-                neighbours = reply["neighbours"]
-
-                print(f"Robot {id}")
-                print(f"Orientation: {orientation}")
-                print(f"Neighbours = {neighbours}")
-                print()
+                    print(f"Robot {id}")
+                    print(f"Orientation: {robots[id].orientation}")
+                    print(f"Neighbours = {robots[id].neighbours}")
+                    print()
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
+
 
 async def stop_robot(robot):
     try:
@@ -212,7 +214,6 @@ async def get_data(robot):
             await websocket.send(json.dumps(message))
             reply_json = await websocket.recv()
             reply = json.loads(reply_json)
-            # print(reply)
 
             robot.ir_readings = reply["ir_reflected"]
 
@@ -263,31 +264,53 @@ async def send_commands(robot):
             else: # Autonomous mode
                 message["set_outer_leds"] = [0] * 8 # e-puck body LEDs off by default (no obstacles detected)
 
-                left = right = robot.MAX_SPEED / 2
+                speed = robot.MAX_SPEED / 4
 
-                for i, reading in enumerate(robot.ir_readings):
-                    if reading > robot.ir_threshold:
-                        # Set wheel speeds to avoid detected obstacles
-                        left += robot.weights_left[i] * reading
-                        right += robot.weights_right[i] * reading
+                average_orientation = 0
 
-                        # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
-                        if i in [0, 7]:
-                            message["set_outer_leds"][0] = 1
-                        elif i == 1:
-                            message["set_outer_leds"][1] = 1
-                        elif i == 2:
-                            message["set_outer_leds"][2] = 1
-                        elif i == 3:
-                            message["set_outer_leds"][3] = 1
-                            message["set_outer_leds"][4] = 1
-                        elif i == 4:
-                            message["set_outer_leds"][4] = 1
-                            message["set_outer_leds"][5] = 1
-                        elif i == 5:
-                            message["set_outer_leds"][6] = 1
-                        elif i == 6:
-                            message["set_outer_leds"][7] = 1
+                for neighbour_id, neighbour in robot.neighbours.items():
+                    average_orientation = average_orientation + neighbour["orientation"]
+
+                average_orientation = average_orientation / len(robot.neighbours)
+
+                # if robot.orientation > 0:
+                threshold = 10
+                difference = robot.orientation - average_orientation
+                print(difference)
+                if abs(difference) < threshold:
+                    left = right = 0
+                elif difference > 0:
+                    left = -speed
+                    right = speed
+                else:
+                    left = speed
+                    right = -speed
+
+                # left = right = robot.MAX_SPEED / 2
+
+                # for i, reading in enumerate(robot.ir_readings):
+                #     if reading > robot.ir_threshold:
+                #         # Set wheel speeds to avoid detected obstacles
+                #         left += robot.weights_left[i] * reading
+                #         right += robot.weights_right[i] * reading
+
+                #         # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
+                #         if i in [0, 7]:
+                #             message["set_outer_leds"][0] = 1
+                #         elif i == 1:
+                #             message["set_outer_leds"][1] = 1
+                #         elif i == 2:
+                #             message["set_outer_leds"][2] = 1
+                #         elif i == 3:
+                #             message["set_outer_leds"][3] = 1
+                #             message["set_outer_leds"][4] = 1
+                #         elif i == 4:
+                #             message["set_outer_leds"][4] = 1
+                #             message["set_outer_leds"][5] = 1
+                #         elif i == 5:
+                #             message["set_outer_leds"][6] = 1
+                #         elif i == 6:
+                #             message["set_outer_leds"][7] = 1
 
                 # Set Pi-puck RGB LEDs based on battery voltage
                 if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
@@ -419,14 +442,19 @@ if __name__ == "__main__":
         print(Fore.RED + "[ERROR]: No connection to server")
         sys.exit(1)
 
-    robot_ids = [1, 2] # Specify robots to work with
+    # robot_ids = [1, 2] # Specify robots to work with
+    # robot_ids = [1] # Specify robots to work with
+    robot_ids = [2] # Specify robots to work with
 
-    # print(Fore.GREEN + "[INFO]: Connecting to robots")
-    # loop.run_until_complete(connect_to_robots(robot_ids))
+    for id in robot_ids:
+        robots[id] = Robot(id)
 
-    # if not robots:
-    #     print(Fore.RED + "[ERROR]: No connection to robots")
-    #     sys.exit(1)
+    print(Fore.GREEN + "[INFO]: Connecting to robots")
+    loop.run_until_complete(connect_to_robots(robot_ids))
+
+    if not robots:
+        print(Fore.RED + "[ERROR]: No connection to robots")
+        sys.exit(1)
 
     # Listen for keyboard input from teleop websocket client
     print(Fore.GREEN + "[INFO]: Starting teleop server")
@@ -439,15 +467,15 @@ if __name__ == "__main__":
         print(Fore.GREEN + "[INFO]: Requesting data from server")
         loop.run_until_complete(get_server_data())
 
-        # print(Fore.GREEN + "[INFO]: Robots detected:", ids)
+        print(Fore.GREEN + "[INFO]: Robots detected:", ids)
         
         # print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
         # loop.run_until_complete(get_robot_data(ids))
 
-        # # print(Fore.GREEN + "Processing...")
+        # print(Fore.GREEN + "Processing...")
 
-        # print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
-        # loop.run_until_complete(send_robot_commands(ids))
+        print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
+        loop.run_until_complete(send_robot_commands(ids))
 
         print()
 
