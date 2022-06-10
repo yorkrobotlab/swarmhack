@@ -9,12 +9,14 @@
 <button id="leds">Set LEDs</button>
 
 <div class="slidecontainer">
-<input type="range" min="0" max="255" value="0" class="slider" id="leftwheel">
+<input type="range" min="-255" max="255" value="0" class="slider" id="leftwheel">
 </div>
 
 <div class="slidecontainer">
-<input type="range" min="0" max="255" value="0" class="slider" id="rightwheel">
+<input type="range" min="-255" max="255" value="0" class="slider" id="rightwheel">
 </div>
+
+<button id="stop">Stop</button>
 
 <input type="checkbox" id="avoider" name="avoider" value="false">
 <label for="avoider">Begin avoiding</label><br>
@@ -30,74 +32,72 @@ var avoiderstate = 0;
 window.addEventListener('load', function(event) {
 
     console.log('Opening connection...');
-    websocket = new WebSocket('ws://192.168.1.152/ws');
+    //websocket = new WebSocket('ws://mona-37.local/ws');
+    websocket = new WebSocket('ws://144.32.165.244/ws');
     websocket.onopen    = onOpen;
     websocket.onclose   = onClose;
     websocket.onmessage = onMessage;
 
     document.getElementById('click').addEventListener('click', function(event) {
-        websocket.send(JSON.stringify({'get-state': true}));
+        websocket.send(JSON.stringify({'get_battery': true}));
+        websocket.send(JSON.stringify({'get_ir_reflected': true}));
     });
 
     document.getElementById('leds').addEventListener('click', function(event) {
-        websocket.send(JSON.stringify({'set-state': {'led': {
-            'num': 1, 
-            'r': Math.floor(Math.random() * 256), 
-            'g': Math.floor(Math.random() * 256), 
-            'b': Math.floor(Math.random() * 256)
-        }}}));
-        websocket.send(JSON.stringify({'set-state': {'led': {
-            'num': 2, 
-            'r': Math.floor(Math.random() * 256), 
-            'g': Math.floor(Math.random() * 256), 
-            'b': Math.floor(Math.random() * 256)
-        }}}));
+        websocket.send(JSON.stringify({
+            'set_outer_leds': [
+                    [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)], 
+                    [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)]
+                ]
+            } 
+        ));
     });
 
-    document.getElementById("leftwheel").oninput = function() {
-        websocket.send(JSON.stringify({'set-state': {'left_motor_forward': JSON.stringify(Math.floor(this.value))}}));
+    document.getElementById('stop').addEventListener('click', function(event) {
+        console.log("All stop");
+        setWheels(0, 0);
+    });
+
+    let updatewheels = function() {
+        setWheels(Math.floor(document.getElementById("leftwheel").value), Math.floor(document.getElementById("rightwheel").value));
     }
-    document.getElementById("rightwheel").oninput = function() {
-        websocket.send(JSON.stringify({'set-state': {'right_motor_forward': Math.floor(this.value)}}));
-    }
+
+    document.getElementById("leftwheel").oninput = updatewheels;
+    document.getElementById("rightwheel").oninput = updatewheels;
 
     setInterval(runAvoider, 100);
 });
+
+
+function setWheels(left, right) {
+    websocket.send(JSON.stringify({
+        'set_motor_speeds': {
+            'left': JSON.stringify(left),
+            'right': JSON.stringify(right)
+        }
+    }));
+}
 
 function runAvoider() {
     if(websocket.readyState != websocket.OPEN) return;
 
     if(document.getElementById("avoider").checked) {
-        websocket.send(JSON.stringify({'get-ir': true}));
+        websocket.send(JSON.stringify({'get_ir_reflected': true}));
 
-        switch(avoiderstate) {
-            case 0: 
-                websocket.send(JSON.stringify(
-                    {'set-state': {
-                        'left_motor_forward': 150,
-                        'right_motor_forward': 150
-                    }}));
-                break;
-            case 1: 
-                websocket.send(JSON.stringify(
-                    {'set-state': {
-                        'left_motor_backward': 100,
-                        'right_motor_forward': 100
-                    }}));   
-                break;
-            case 2: 
-                websocket.send(JSON.stringify(
-                    {'set-state': {
-                        'left_motor_forward': 100,
-                        'right_motor_backward': 100
-                    }}));   
-            break;
+        var newstate;
+        if(irdetect[1] || irdetect[2] || irdetect[3]) newstate = 1;
+        else if(irdetect[0]) newstate = 2;
+        else if(irdetect[4]) newstate = 1;
+        else newstate = 0;
+
+        if(newstate != avoiderstate) {
+            avoiderstate = newstate;
+            switch(avoiderstate) {
+                case 0: setWheels(150, 150); break;
+                case 1: setWheels(-100, 100); break;
+                case 2: setWheels(100, -100); break;
+            }
         }
-
-        if(irdetect[2] || irdetect[3] || irdetect[4]) avoiderstate = 1;
-        else if(irdetect[0]) avoiderstate = 2;
-        else if(irdetect[4]) avoiderstate = 1;
-        else avoiderstate = 0;
     }
 }
 
@@ -111,15 +111,14 @@ function onClose(event) {
 
 function onMessage(event) {
     let data = JSON.parse(event.data);
-    //document.getElementById('state').textContent = JSON.stringify(data);
-    //console.log(data);
-
-    if(data.hasOwnProperty("ir")) {
+    console.log(event.data)
+    if(data.hasOwnProperty("ir_reflected")) {
         for(let i = 0; i < 5; i++) {
-            irvalues[i] = data["ir"][i];
+            irvalues[i] = data["ir_reflected"][i];
             irdetect[i] = (irvalues[i] > 35);
         }
     }
+    document.getElementById('state').textContent = irvalues;
 }
 
 </script>
