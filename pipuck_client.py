@@ -7,6 +7,7 @@ import signal
 
 MAX_SPEED = 500
 ir_threshold = 300
+BAT_LOW_VOLTAGE = 3.6
 weights_left = [-10, -10, -5, 0, 0, 5, 10, 10]
 weights_right = [-1 * x for x in weights_left]
 
@@ -96,8 +97,8 @@ async def test():
                     elif i == 6:
                         message["set_outer_leds"][7] = 1
 
-            # Set Pi-puck RGB LEDs based on whether an obstacle has been detected
-            if any(reading > ir_threshold for reading in ir_readings):
+            # Set Pi-puck RGB LEDs based on battery voltage
+            if battery_voltage < BAT_LOW_VOLTAGE:
                 message["set_leds_colour"] = "red"
             else:
                 message["set_leds_colour"] = "green"
