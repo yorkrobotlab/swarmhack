@@ -191,7 +191,7 @@ class Tracker(threading.Thread):
 
 
                     # Draw boundary of virtual environment based on corner tag positions
-                    cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 5, lineType=cv2.LINE_AA)
+                    cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
             
                     # Process robots
                     for id, robot in self.robots.items():
@@ -324,7 +324,15 @@ if __name__ == "__main__":
     tracker.start()
     
     print("starting server")
-    start_server = websockets.serve(ws_handler=handler, host="144.32.165.233", port=6000)
+
+    ##
+    # Use the following iptables rule to forward port 80 to 6000 for the server to use:
+    #   sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 6000
+    # Alternatively, change the port below to 80 and run this Python script as root.
+    ##
+    start_server = websockets.serve(ws_handler=handler, host=None, port=6000)
+    # start_server = websockets.serve(ws_handler=handler, host="144.32.165.233", port=6000)
+
     print("started server")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(start_server)
