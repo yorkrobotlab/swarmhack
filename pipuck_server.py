@@ -21,44 +21,38 @@ async def handler(websocket):
             reply["awake"] = True
             send_reply = True
 
-        if "get_ir_reflected" in message:
-            reply["ir_reflected"] = pipuck.epuck.ir_reflected
-            send_reply = True
-        
-        if "get_ir_ambient" in message:
-            reply["ir_ambient"] = pipuck.epuck.ir_ambient
+        if "get_ir" in message:
+            reply["ir"] = pipuck.epuck.ir_reflected
             send_reply = True
 
         if "get_battery" in message:
             charging, voltage, percentage = pipuck.get_battery_state("epuck")
             reply["battery"] = {}
-            reply["battery"]["charging"] = charging
             reply["battery"]["voltage"] = voltage
             reply["battery"]["percentage"] = percentage
             send_reply = True
-        
+
         # Send reply, if requested
         if send_reply:
             await websocket.send(json.dumps(reply))
 
-        # Process any commands received
-        if "set_outer_leds" in message:
-            outer_leds = message["set_outer_leds"]
-            pipuck.epuck.set_outer_leds(outer_leds[0],
-                                        outer_leds[1],
-                                        outer_leds[2],
-                                        outer_leds[3],
-                                        outer_leds[4],
-                                        outer_leds[5],
-                                        outer_leds[6],
-                                        outer_leds[7])
-
         if "set_leds_colour" in message:
-            pipuck.set_leds_colour(message["set_leds_colour"])
+            try:
+                pipuck.set_leds_colour(message["set_leds_colour"])
+            except (KeyError, ValueError):
+                pass
 
         if "set_motor_speeds" in message:
-            pipuck.epuck.set_motor_speeds(message["set_motor_speeds"]["left"],
-                                          message["set_motor_speeds"]["right"])
+            try:
+                left_in = int(message["set_motor_speeds"]["left"])
+                right_in = int(message["set_motor_speeds"]["right"])
+                left_clamped = max(min(left_in, 100), -100)
+                right_clamped = max(min(right_in, 100), -100)
+                left_scaled = left_clamped * 5
+                right_scaled = right_clamped * 5
+                pipuck.epuck.set_motor_speeds(left_scaled, right_scaled)
+            except (KeyError, ValueError):
+                pass
 
 
 if __name__ == "__main__":
