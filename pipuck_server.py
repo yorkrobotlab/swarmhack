@@ -16,6 +16,10 @@ async def handler(websocket):
         reply = {}
         send_reply = False
 
+        if "check_awake" in message:
+            reply["awake"] = True
+            send_reply = True
+
         if "get_ir_reflected" in message:
             reply["ir_reflected"] = pipuck.epuck.ir_reflected
             send_reply = True
