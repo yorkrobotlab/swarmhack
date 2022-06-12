@@ -1,3 +1,4 @@
+from asyncio import tasks
 import sys
 import cv2
 import screeninfo
@@ -9,6 +10,7 @@ import json
 from camera import *
 from virtual_objects import Vector2D
 import itertools
+import random
 
 red = (0, 0, 255)
 green = (0, 255, 0)
@@ -55,6 +57,13 @@ class SensorReading:
         self.bearing = bearing
         self.orientation = orientation
 
+class Task:
+    def __init__(self, id, workers, position, radius):
+        self.id = id
+        self.workers = workers
+        self.position = position
+        self.radius = radius
+
 class Tracker(threading.Thread):
 
     def __init__(self):
@@ -62,15 +71,18 @@ class Tracker(threading.Thread):
         self.camera = Camera()
         self.calibrated = False
         self.num_corner_tags = 0
-        self.min_x = 0
-        self.min_y = 0
-        self.max_x = 0
-        self.max_y = 0
+        self.min_x = 0 # In pixels
+        self.min_y = 0 # In pixels
+        self.max_x = 0 # In pixels
+        self.max_y = 0 # In pixels
+        self.centre = Vector2D(0, 0) # In metres
         # self.corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
         self.corner_distance_metres = 2.06 # Euclidean distance between corner tags in metres
         self.corner_distance_pixels = 0
         self.scale_factor = 0
         self.robots = {}
+        self.tasks = {}
+        self.task_counter = 0
 
     def run(self):
         while True:        
@@ -121,11 +133,62 @@ class Tracker(threading.Thread):
 
                                 self.corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x, self.max_y]) # Euclidean distance between corner tags in pixels
                                 self.scale_factor = self.corner_distance_pixels / self.corner_distance_metres
+                                x = ((self.max_x - self.min_x) / 2) / self.scale_factor # Convert to metres
+                                y = ((self.max_y - self.min_y) / 2) / self.scale_factor # Convert to metres
+                                self.centre = Vector2D(x, y)
                                 self.calibrated = True
 
                             self.num_corner_tags = self.num_corner_tags + 1
 
                 if self.calibrated:
+
+                    while len(self.tasks) < 3:
+                        id = self.task_counter
+                        placed = False
+                        while not placed:
+                            overlaps = False
+                            workers = random.randint(1, 5)
+                            radius = math.sqrt(workers) * 0.1
+                            min_x_metres = self.min_x / self.scale_factor
+                            max_x_metres = self.max_x / self.scale_factor
+                            min_y_metres = self.min_y / self.scale_factor
+                            max_y_metres = self.max_y / self.scale_factor
+                            x = random.uniform(min_x_metres + radius, max_x_metres - radius)
+                            y = random.uniform(min_y_metres + radius, max_y_metres - radius)
+                            position = Vector2D(x, y) # In metres
+
+                            for other_task in self.tasks.values():
+                                overlap = radius + other_task.radius
+                                if position.distance_to(other_task.position) < overlap:
+                                    overlaps = True
+                            
+                            if not overlaps:
+                                placed = True
+
+                        self.tasks[id] = Task(id, workers, position, radius)
+                        self.task_counter = self.task_counter + 1
+
+                    for id, task in self.tasks.items():
+
+                        colour = red
+
+                        # Draw task boundary
+                        pixel_radius = int(task.radius * self.scale_factor)
+                        x = int(task.position.x * self.scale_factor)
+                        y = int(task.position.y * self.scale_factor)
+                        cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
+
+                        # Draw task ID
+                        text = str(task.workers)
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1.5
+                        thickness = 4
+                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                        position = (int(x - textsize[0]/2), int(y + textsize[1]/2))
+                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+
+
 
                     # Draw boundary of virtual environment based on corner tag positions
                     cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 5, lineType=cv2.LINE_AA)
@@ -200,14 +263,20 @@ class Tracker(threading.Thread):
                 sys.exit()
 
 async def handler(websocket):
+    print("starting handler")
     async for packet in websocket:
+        print("received packet")
+        print(packet)
         message = json.loads(packet)
+
+        print(message)
         
         # Process any requests received
         reply = {}
         send_reply = False
 
         if "check_awake" in message:
+            print("CHECK AWAKE")
             reply["awake"] = True
             send_reply = True
 
@@ -254,7 +323,9 @@ if __name__ == "__main__":
     tracker = Tracker()
     tracker.start()
     
-    start_server = websockets.serve(ws_handler=handler, host=None, port=6000)
+    print("starting server")
+    start_server = websockets.serve(ws_handler=handler, host="144.32.165.233", port=6000)
+    print("started server")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(start_server)
     loop.run_forever()

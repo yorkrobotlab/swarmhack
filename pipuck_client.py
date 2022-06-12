@@ -459,7 +459,7 @@ if __name__ == "__main__":
     # robot_ids = [1, 2] # Specify robots to work with
     # robot_ids = [1] # Specify robots to work with
     # robot_ids = [2] # Specify robots to work with
-    robot_ids = [7] # Specify robots to work with
+    robot_ids = [6] # Specify robots to work with
 
     for id in robot_ids:
         robots[id] = Robot(id)
