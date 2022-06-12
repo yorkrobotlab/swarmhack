@@ -8,6 +8,7 @@ from pipuck.pipuck import PiPuck
 pipuck = PiPuck(epuck_version=1)
 pipuck.epuck.enable_ir_sensors(True)
 
+
 async def handler(websocket):
     async for packet in websocket:
         message = json.loads(packet)
@@ -59,7 +60,8 @@ async def handler(websocket):
             pipuck.epuck.set_motor_speeds(message["set_motor_speeds"]["left"],
                                           message["set_motor_speeds"]["right"])
 
+
 if __name__ == "__main__":
-    start_server = websockets.serve(ws_handler=handler, host=None, port=5000)
+    start_server = websockets.serve(ws_handler=handler, host=None, port=80)
     asyncio.get_event_loop().run_until_complete(start_server)
     asyncio.get_event_loop().run_forever()
