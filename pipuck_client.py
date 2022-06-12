@@ -41,6 +41,19 @@ server_address = "localhost"
 server_port = 6000
 robot_port = 5000
 
+ip_addresses = {
+    1:  "144.32.165.227",
+    2:  "144.32.165.226",
+    3:  "144.32.165.225",
+    4:  "144.32.165.224",
+    5:  "144.32.165.231",
+    6:  "144.32.165.223",
+    7:  "144.32.165.222",
+    8:  "144.32.165.221",
+    9:  "144.32.165.216",
+    10: "144.32.165.220"
+}
+
 server_connection = None
 robots = {}
 ids = []
@@ -95,7 +108,8 @@ async def connect_to_robots(ids):
     loop = asyncio.get_event_loop()
 
     for id in ids:
-        uri = "ws://pi-puck-" + str(id) + ".local:" + str(robot_port)
+        uri = "ws://" + ip_addresses[id] + ":" + str(robot_port)
+        # uri = "ws://pi-puck-" + str(id) + ".local:" + str(robot_port)
         connection = websockets.connect(uri)
 
         print("Opening connection to robot:", uri)
@@ -264,53 +278,53 @@ async def send_commands(robot):
             else: # Autonomous mode
                 message["set_outer_leds"] = [0] * 8 # e-puck body LEDs off by default (no obstacles detected)
 
-                speed = robot.MAX_SPEED / 4
+                # speed = robot.MAX_SPEED / 4
 
-                average_orientation = 0
+                # average_orientation = 0
 
-                for neighbour_id, neighbour in robot.neighbours.items():
-                    average_orientation = average_orientation + neighbour["orientation"]
+                # for neighbour_id, neighbour in robot.neighbours.items():
+                #     average_orientation = average_orientation + neighbour["orientation"]
 
-                average_orientation = average_orientation / len(robot.neighbours)
+                # average_orientation = average_orientation / len(robot.neighbours)
 
-                # if robot.orientation > 0:
-                threshold = 10
-                difference = robot.orientation - average_orientation
-                print(difference)
-                if abs(difference) < threshold:
-                    left = right = 0
-                elif difference > 0:
-                    left = -speed
-                    right = speed
-                else:
-                    left = speed
-                    right = -speed
+                # # if robot.orientation > 0:
+                # threshold = 10
+                # difference = robot.orientation - average_orientation
+                # print(difference)
+                # if abs(difference) < threshold:
+                #     left = right = 0
+                # elif difference > 0:
+                #     left = -speed
+                #     right = speed
+                # else:
+                #     left = speed
+                #     right = -speed
 
-                # left = right = robot.MAX_SPEED / 2
+                left = right = robot.MAX_SPEED / 2
 
-                # for i, reading in enumerate(robot.ir_readings):
-                #     if reading > robot.ir_threshold:
-                #         # Set wheel speeds to avoid detected obstacles
-                #         left += robot.weights_left[i] * reading
-                #         right += robot.weights_right[i] * reading
+                for i, reading in enumerate(robot.ir_readings):
+                    if reading > robot.ir_threshold:
+                        # Set wheel speeds to avoid detected obstacles
+                        left += robot.weights_left[i] * reading
+                        right += robot.weights_right[i] * reading
 
-                #         # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
-                #         if i in [0, 7]:
-                #             message["set_outer_leds"][0] = 1
-                #         elif i == 1:
-                #             message["set_outer_leds"][1] = 1
-                #         elif i == 2:
-                #             message["set_outer_leds"][2] = 1
-                #         elif i == 3:
-                #             message["set_outer_leds"][3] = 1
-                #             message["set_outer_leds"][4] = 1
-                #         elif i == 4:
-                #             message["set_outer_leds"][4] = 1
-                #             message["set_outer_leds"][5] = 1
-                #         elif i == 5:
-                #             message["set_outer_leds"][6] = 1
-                #         elif i == 6:
-                #             message["set_outer_leds"][7] = 1
+                        # Illuminate e-puck body LEDs based on which IR sensors have detected an obstacle
+                        if i in [0, 7]:
+                            message["set_outer_leds"][0] = 1
+                        elif i == 1:
+                            message["set_outer_leds"][1] = 1
+                        elif i == 2:
+                            message["set_outer_leds"][2] = 1
+                        elif i == 3:
+                            message["set_outer_leds"][3] = 1
+                            message["set_outer_leds"][4] = 1
+                        elif i == 4:
+                            message["set_outer_leds"][4] = 1
+                            message["set_outer_leds"][5] = 1
+                        elif i == 5:
+                            message["set_outer_leds"][6] = 1
+                        elif i == 6:
+                            message["set_outer_leds"][7] = 1
 
                 # Set Pi-puck RGB LEDs based on battery voltage
                 if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
@@ -444,7 +458,8 @@ if __name__ == "__main__":
 
     # robot_ids = [1, 2] # Specify robots to work with
     # robot_ids = [1] # Specify robots to work with
-    robot_ids = [2] # Specify robots to work with
+    # robot_ids = [2] # Specify robots to work with
+    robot_ids = [7] # Specify robots to work with
 
     for id in robot_ids:
         robots[id] = Robot(id)
@@ -469,8 +484,8 @@ if __name__ == "__main__":
 
         print(Fore.GREEN + "[INFO]: Robots detected:", ids)
         
-        # print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
-        # loop.run_until_complete(get_robot_data(ids))
+        print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
+        loop.run_until_complete(get_robot_data(ids))
 
         # print(Fore.GREEN + "Processing...")
 

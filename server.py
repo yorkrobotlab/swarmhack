@@ -14,6 +14,8 @@ red = (0, 0, 255)
 green = (0, 255, 0)
 magenta = (255, 0, 255)
 cyan = (255, 255, 0)
+black = (0, 0, 0)
+white = (255, 255, 255)
 
 class Tag:
     def __init__(self, id, raw_tag):
@@ -64,7 +66,8 @@ class Tracker(threading.Thread):
         self.min_y = 0
         self.max_x = 0
         self.max_y = 0
-        self.corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
+        # self.corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
+        self.corner_distance_metres = 2.06 # Euclidean distance between corner tags in metres
         self.corner_distance_pixels = 0
         self.scale_factor = 0
         self.robots = {}
@@ -155,15 +158,6 @@ class Tracker(threading.Thread):
                         # Draw line from centre point to front of tag
                         cv2.line(image, (tag.centre.x, tag.centre.y), (tag.front.x, tag.front.y), red, 2, lineType=cv2.LINE_AA)
 
-                        # Draw tag ID
-                        text = str(tag.id)
-                        font = cv2.FONT_HERSHEY_SIMPLEX
-                        font_scale = 1
-                        thickness = 2
-                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                        position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
-                        cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
-
                         # Draw robot's sensor range
                         sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
                         cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
@@ -172,6 +166,20 @@ class Tracker(threading.Thread):
                         for neighbour_id in robot.neighbours.keys():
                             neighbour = self.robots[neighbour_id]
                             cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 2, lineType=cv2.LINE_AA)
+
+                    for id, robot in self.robots.items():
+
+                        tag = robot.tag
+
+                        # Draw tag ID
+                        text = str(tag.id)
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1.5
+                        thickness = 4
+                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                        position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
+                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
