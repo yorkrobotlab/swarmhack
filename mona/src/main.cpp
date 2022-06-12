@@ -16,7 +16,7 @@
 #include "credentials.h"
 
 AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
+AsyncWebSocket ws("/");
 
 void sendState(bool allState);
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len);
@@ -185,7 +185,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
 		}
 
 		if(json.containsKey("check_awake")) {
-			reply["reply"] = true;
+			reply["awake"] = true;
 			sendReply = true;
 		}
 
