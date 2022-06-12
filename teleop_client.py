@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Based on ROS teleop_twist_keyboard: http://wiki.ros.org/teleop_twist_keyboard
 # https://github.com/ros-teleop/teleop_twist_keyboard/blob/master/teleop_twist_keyboard.py
 
