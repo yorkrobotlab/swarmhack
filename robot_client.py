@@ -189,10 +189,12 @@ async def get_server_data():
 
                 active_robots[id].orientation = robot["orientation"]
                 active_robots[id].neighbours = robot["neighbours"]
+                active_robots[id].tasks = robot["tasks"]
 
                 print(f"Robot {id}")
-                print(f"Orientation: {active_robots[id].orientation}")
+                print(f"Orientation = {active_robots[id].orientation}")
                 print(f"Neighbours = {active_robots[id].neighbours}")
+                print(f"Tasks = {active_robots[id].tasks}")
                 print()
 
     except Exception as e:
