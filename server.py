@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 
-from asyncio import tasks
 import sys
 import cv2
-import screeninfo
 import math
 import threading
 import asyncio
 import websockets
 import json
 from camera import *
-from virtual_objects import Vector2D
+from vector2d import Vector2D
 import itertools
 import random
 import angles
@@ -352,23 +350,6 @@ async def handler(websocket):
             reply["awake"] = True
             send_reply = True
 
-        if "get_ids" in message:
-            reply["ids"] = list(tracker.robots.keys())
-            send_reply = True
-
-        if "get_robot" in message:
-            id = message["get_robot"]
-            reply["orientation"] = tracker.robots[id].orientation
-            reply["neighbours"] = {}
-
-            for neighbour_id, neighbour in tracker.robots[id].neighbours.items():
-                reply["neighbours"][neighbour_id] = {}
-                reply["neighbours"][neighbour_id]["range"] = neighbour.range
-                reply["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
-                reply["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
-
-            send_reply = True
-
         if "get_robots" in message:
 
             for id, robot in tracker.robots.items():
@@ -400,8 +381,6 @@ if __name__ == "__main__":
     global tracker
     tracker = Tracker()
     tracker.start()
-    
-    print("starting server")
 
     ##
     # Use the following iptables rule to forward port 80 to 6000 for the server to use:
@@ -411,7 +390,6 @@ if __name__ == "__main__":
     start_server = websockets.serve(ws_handler=handler, host=None, port=6000)
     # start_server = websockets.serve(ws_handler=handler, host="144.32.165.233", port=6000)
 
-    print("started server")
     loop = asyncio.get_event_loop()
     loop.run_until_complete(start_server)
     loop.run_forever()
