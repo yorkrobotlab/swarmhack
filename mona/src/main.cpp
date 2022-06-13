@@ -7,6 +7,7 @@
 #include <ESPAsyncWebServer.h>
 #include "AsyncJson.h"
 #include "ArduinoJson.h"
+#include <map>
 
 /*
  * Create a file called credentials.h with the following two lines
@@ -14,6 +15,24 @@
  *  #define WIFI_PASSWORD "yourpassword"
  */
 #include "credentials.h"
+
+struct colour {
+	int red;
+	int green;
+	int blue;
+};
+
+std::map<String, colour> colours = {
+	{ "off", {0, 0, 0} },
+	{ "black", {0, 0, 0} },
+	{ "red", {20, 0, 0} },
+	{ "green", {0, 20, 0} },
+	{ "yellow", {10, 10, 0} },
+	{ "blue", {0, 0, 20} },
+	{ "magenta", {10, 0, 10} },
+	{ "cyan", {0, 10, 10} },
+	{ "white", {10, 10, 10} }
+};
 
 AsyncWebServer server(80);
 AsyncWebSocket ws("/");
@@ -24,35 +43,6 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 int getID();
 
 // Settings
-
-//Current system mode
-// 0 = normal. reacts only to websocket commands
-// 1 = reacts to websocket commands but also use IR to avoid frontal collisions
-uint8_t mode = 0;
-
-// How many loops between running the autoavoid code (when in autoavoid mode)
-#define AUTOAVOIDCOUNT 10
-
-// Mapping of MAC address to ID
-#define NUM_MAPPINGS 10
-
-typedef struct {
-	String mac;
-	uint8_t id;
-} mapping_t;
-
-mapping_t mappings[NUM_MAPPINGS] = {
-	{"8C:CE:4E:BB:4C:08", 31},
-	{"8C:CE:4E:BB:4C:00", 32},
-	{"0C:DC:7E:51:CA:74", 33},
-	{"C4:4F:33:54:24:B5", 34},
-	{"8C:CE:4E:BB:4B:DC", 35},
-	{"8C:CE:4E:BB:4B:D0", 36},
-	{"0C:DC:7E:51:CA:3C", 37},
-	{"8C:CE:4E:BB:4B:E4", 38},
-	{"C4:4F:33:53:FA:0D", 39},
-	{"8C:CE:4E:BB:4C:A0", 40}
-};
 
 char identifier[10]; //Will be populated with a string like "mona-3"
 
@@ -113,42 +103,6 @@ void setup() {
 
 void loop(){
 	//In the normal mode where the Mona is simply responding to websocket instructions, nothing is required in loop()
-
-	static int avoiderstate = 0;
-	static bool irvals[5];
-	static int autoavoidcount = AUTOAVOIDCOUNT;
-
-	switch(mode) {
-		case 0:
-			break;
-		case 1:
-			//autoavoider
-			autoavoidcount--;
-			if(autoavoidcount <= 0) {
-				for(auto i = 1; i < 4; i++) irvals[i] = Detect_object(i+1, 35);
-				//Ir leds 2/3/4 are in front
-				if(irvals[1] || irvals[2] || irvals[3]) {
-					Motors_stop();
-				}
-				autoavoidcount = AUTOAVOIDCOUNT;
-			}
-			break;
-		case 2:
-			//avoider
-			switch(avoiderstate) {
-				case 0: Motors_forward(150); break;
-				case 1: Motors_spin_left(100); break;
-				case 2: Motors_spin_right(100); break;
-			}
-
-			for(auto i = 0; i < 5; i++) irvals[i] = Detect_object(i+1, 35);
-			if(irvals[1] || irvals[2] || irvals[3]) avoiderstate = 1;
-			else if(irvals[0]) avoiderstate = 2;
-			else if(irvals[4]) avoiderstate = 1;
-			else avoiderstate = 0;
-			delay(5);
-			break;
-	}
 }
 
 
@@ -156,6 +110,9 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
 	switch (type) {
 	case WS_EVT_CONNECT:
 		Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+		//LEDs to off
+		Set_LED(1,0,0,0);
+		Set_LED(2,0,0,0);
 		break;
 	case WS_EVT_DISCONNECT:
 		Serial.printf("WebSocket client #%u disconnected\n", client->id());
@@ -189,23 +146,16 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
 			sendReply = true;
 		}
 
-		if(json.containsKey("get_ir_reflected")) {
-			JsonArray irlevels = reply.createNestedArray("ir_reflected");
+		if(json.containsKey("get_ir")) {
+			JsonArray irlevels = reply.createNestedArray("ir");
 			for(auto i = 0; i < 5; i++) irlevels.add(Get_IR(i+1));
-			sendReply = true;
-		}
-
-		if(json.containsKey("get_ir_ambient")) {
-			JsonArray irlevels = reply.createNestedArray("ir_ambient");
-			for(auto i = 0; i < 5; i++) irlevels.add(Read_IR(i+1));
 			sendReply = true;
 		}
 
 		if(json.containsKey("get_battery")) {
 			JsonObject battery = reply.createNestedObject("battery");
+			battery["voltage"] = analogRead(Batt_Vol_pin) / 1000.0; // ADC value is in mV
 			battery["percentage"] = Batt_Vol();
-			battery["voltage"] = analogRead(Batt_Vol_pin);
-			battery["charging"] = "unsupported";
 			sendReply = true;
 		}
 
@@ -215,53 +165,52 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
 			ws.textAll(response);
 		}
 
-		if(json.containsKey("set_outer_leds")) {
-			JsonArray leds = json["set_outer_leds"];
-			if(leds.size() >= 2) {
+		if (json.containsKey("set_leds_colour")) {
+			String col = json["set_leds_colour"];
+			auto it = colours.find(col);
+			if (it != colours.end()) {
+				colour c = it->second;
 				for(int i = 0; i < 2; i++) {
-					JsonArray led = leds[i];
-					if(led.size() >= 3) {
-						Set_LED(i+1, led[0], led[1], led[2]);
-					}
+					Set_LED(i+1, c.red, c.green, c.blue);
 				}
 			}
 		}
 
-		if(json.containsKey("set_leds_colour")) {
-			JsonArray col = json["set_leds_colour"];
-			if(col.size() >= 3) {
-				for(int i = 0; i < 2; i++) {
-					Set_LED(i+1, col[0], col[1], col[2]);
-				}
-			}
-		}
-		
 		if(json.containsKey("set_motor_speeds")) {
 			auto mot = json["set_motor_speeds"];
-			if(mot.containsKey("left")) {
-				int val = mot["left"];
-				if(val > 0) Left_mot_forward(val);
-				if(val < 0) Left_mot_backward(abs(val));
-				if(val == 0) Left_mot_stop();
-			}
-			if(mot.containsKey("right")) {
-				int val = mot["right"];
-				if(val > 0) Right_mot_forward(val);
-				if(val < 0) Right_mot_backward(abs(val));
-				if(val == 0) Right_mot_stop();
+			if(mot.containsKey("left") && mot.containsKey("right")) {
+				int left_in = mot["left"];
+				int right_in = mot["right"];
+				int left_clamped = max(min(left_in, 100), -100);
+                int right_clamped = max(min(right_in, 100), -100);
+				int left_scaled = left_clamped * 1.3f;
+                int right_scaled = right_clamped * 1.3f;
+				if (left_scaled > 0) {
+					Left_mot_forward(left_scaled);
+				}
+				else if (left_scaled < 0) {
+					Left_mot_backward(-left_scaled);
+				}
+				else {
+					Left_mot_stop();
+				}
+				if (right_scaled > 0) {
+					Right_mot_forward(right_scaled);
+				}
+				else if (right_scaled < 0) {
+					Right_mot_backward(-right_scaled);
+				}
+				else {
+					Right_mot_stop();
+				}
 			}
 		}
-
-		if(json.containsKey("set_mode")) mode = json["set_mode"];
 	}
 }
 
 
-// Get the ID of this robot based on looking our MAC address up in the "mappings" table
+// Get the ID of this robot
 int getID() {
 	String mac = WiFi.macAddress();
-	for(auto i = 0; i < NUM_MAPPINGS; i++) {
-		if(mac == mappings[i].mac) return mappings[i].id;
-	}
 	return mac.charAt(15) + mac.charAt(16);
 }

@@ -33,22 +33,22 @@ window.addEventListener('load', function(event) {
 
     console.log('Opening connection...');
     //websocket = new WebSocket('ws://mona-37.local/ws');
-    websocket = new WebSocket('ws://144.32.165.244/ws');
+    websocket = new WebSocket('ws://144.32.165.235/');
     websocket.onopen    = onOpen;
     websocket.onclose   = onClose;
     websocket.onmessage = onMessage;
 
     document.getElementById('click').addEventListener('click', function(event) {
         websocket.send(JSON.stringify({'get_battery': true}));
-        websocket.send(JSON.stringify({'get_ir_reflected': true}));
+        websocket.send(JSON.stringify({'get_ir': true}));
     });
+
+    c = 0;
+    colours = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'];
 
     document.getElementById('leds').addEventListener('click', function(event) {
         websocket.send(JSON.stringify({
-            'set_outer_leds': [
-                    [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)], 
-                    [Math.floor(Math.random() * 256), Math.floor(Math.random() * 256), Math.floor(Math.random() * 256)]
-                ]
+            'set_leds_colour': colours[Math.floor(Math.random() * 8)]
             } 
         ));
     });
@@ -112,9 +112,9 @@ function onClose(event) {
 function onMessage(event) {
     let data = JSON.parse(event.data);
     console.log(event.data)
-    if(data.hasOwnProperty("ir_reflected")) {
+    if(data.hasOwnProperty("ir")) {
         for(let i = 0; i < 5; i++) {
-            irvalues[i] = data["ir_reflected"][i];
+            irvalues[i] = data["ir"][i];
             irdetect[i] = (irvalues[i] > 35);
         }
     }

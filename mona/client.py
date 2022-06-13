@@ -18,6 +18,6 @@ def on_open(ws):
 
 if __name__ == "__main__":
     websocket.enableTrace(True)
-    ws = websocket.WebSocketApp("ws://192.168.4.1/ws", on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
+    ws = websocket.WebSocketApp("ws://144.32.165.239/", on_open=on_open, on_message=on_message, on_error=on_error, on_close=on_close)
     ws.run_forever()
     print("hello")
