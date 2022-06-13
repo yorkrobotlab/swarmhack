@@ -15,6 +15,9 @@ from colorama import Fore
 
 colorama.init(autoreset=True)
 
+# Persistent Websockets!!!!!!!!!!!!!!!!
+# https://stackoverflow.com/questions/59182741/python-websockets-lib-client-persistent-connection-with-class-implementation
+
 # Handle Ctrl+C termination
 
 # https://stackoverflow.com/questions/2148888/python-trap-all-signals
@@ -82,7 +85,7 @@ class Robot:
 
 async def connect_to_server():
     uri = f"ws://{server_address}:{server_port}"
-    connection = websockets.connect(uri)
+    connection = await websockets.connect(uri)
 
     print("Opening connection to server: " + uri)
 
@@ -101,7 +104,7 @@ async def connect_to_robots(ids):
         ip = robots[id]
         if ip != '':
             uri = f"ws://{ip}:{robot_port}"
-            connection = websockets.connect(uri)
+            connection = await websockets.connect(uri)
 
             print("Opening connection to robot:", uri)
 
@@ -120,15 +123,14 @@ async def check_awake(connection):
     awake = False
 
     try:
-        async with connection as websocket:
-            message = {"check_awake": True}
+        message = {"check_awake": True}
 
-            # Send request for data and wait for reply
-            await websocket.send(json.dumps(message))
-            reply_json = await websocket.recv()
-            reply = json.loads(reply_json)
+        # Send request for data and wait for reply
+        await connection.send(json.dumps(message))
+        reply_json = await connection.recv()
+        reply = json.loads(reply_json)
 
-            awake = reply["awake"]
+        awake = reply["awake"]
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -163,31 +165,29 @@ async def message_robots(ids, function):
 
 async def get_server_data():
     try:
-        async with server_connection as websocket:
+        global ids
+        message = {"get_robots": True}
 
-            global ids
-            message = {"get_robots": True}
+        # Send request for data and wait for reply
+        await server_connection.send(json.dumps(message))
+        reply_json = await server_connection.recv()
+        reply = json.loads(reply_json)
 
-            # Send request for data and wait for reply
-            await websocket.send(json.dumps(message))
-            reply_json = await websocket.recv()
-            reply = json.loads(reply_json)
+        ids = list(reply.keys())
+        ids = [int(id) for id in ids]
 
-            ids = list(reply.keys())
-            ids = [int(id) for id in ids]
+        for id, robot in reply.items():
+            id = int(id)  # ID is sent as an integer - why is this necessary?
 
-            for id, robot in reply.items():
-                id = int(id)  # ID is sent as an integer - why is this necessary?
+            if id in active_robots.keys():  # Filter based on robots of interest
 
-                if id in active_robots.keys():  # Filter based on robots of interest
+                active_robots[id].orientation = robot["orientation"]
+                active_robots[id].neighbours = robot["neighbours"]
 
-                    active_robots[id].orientation = robot["orientation"]
-                    active_robots[id].neighbours = robot["neighbours"]
-                
-                    print(f"Robot {id}")
-                    print(f"Orientation: {active_robots[id].orientation}")
-                    print(f"Neighbours = {active_robots[id].neighbours}")
-                    print()
+                print(f"Robot {id}")
+                print(f"Orientation: {active_robots[id].orientation}")
+                print(f"Neighbours = {active_robots[id].neighbours}")
+                print()
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -195,40 +195,36 @@ async def get_server_data():
 
 async def stop_robot(robot):
     try:
-        async with robot.connection as websocket:
+        # Turn off LEDs and motors when killed
+        message = {"set_leds_colour": "off", "set_motor_speeds": {}}
+        message["set_motor_speeds"]["left"] = 0
+        message["set_motor_speeds"]["right"] = 0
+        await robot.connection.send(json.dumps(message))
 
-            # Turn of LEDs and motors when killed
-            message = {"set_leds_colour": "off", "set_outer_leds": [0] * 8, "set_motor_speeds": {}}
-            message["set_motor_speeds"]["left"] = 0
-            message["set_motor_speeds"]["right"] = 0
-            await websocket.send(json.dumps(message))
-
-            # Send command message
-            await websocket.send(json.dumps(message))
+        # Send command message
+        await robot.connection.send(json.dumps(message))
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
 
 async def get_data(robot):
     try:
-        async with robot.connection as websocket:
+        message = {"get_ir": True, "get_battery": True}
 
-            message = {"get_ir": True, "get_battery": True}
+        # Send request for data and wait for reply
+        await robot.connection.send(json.dumps(message))
+        reply_json = await robot.connection.recv()
+        reply = json.loads(reply_json)
 
-            # Send request for data and wait for reply
-            await websocket.send(json.dumps(message))
-            reply_json = await websocket.recv()
-            reply = json.loads(reply_json)
+        robot.ir_readings = reply["ir"]
 
-            robot.ir_readings = reply["ir"]
+        robot.battery_voltage = reply["battery"]["voltage"]
+        robot.battery_percentage = reply["battery"]["percentage"]
 
-            robot.battery_voltage = reply["battery"]["voltage"]
-            robot.battery_percentage = reply["battery"]["percentage"]
-
-            print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
-            print("[Robot {}] Battery: {:.2f}V, {:.2f}%" .format(robot.id,
-                                                                 robot.battery_voltage,
-                                                                 robot.battery_percentage * 100))
+        print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
+        print("[Robot {}] Battery: {:.2f}V, {}%" .format(robot.id,
+                                                         robot.battery_voltage,
+                                                         robot.battery_percentage))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -236,65 +232,63 @@ async def get_data(robot):
 
 async def send_commands(robot):
     try:
-        async with robot.connection as websocket:
+        # Turn off LEDs and motors when killed
+        if kill_now():
+            message = {"set_leds_colour": "off", "set_motor_speeds": {}}
+            message["set_motor_speeds"]["left"] = 0
+            message["set_motor_speeds"]["right"] = 0
+            await robot.connection.send(json.dumps(message))
 
-            # Turn of LEDs and motors when killed
-            if kill_now():
-                message = {"set_leds_colour": "off", "set_motor_speeds": {}}
-                message["set_motor_speeds"]["left"] = 0
-                message["set_motor_speeds"]["right"] = 0
-                await websocket.send(json.dumps(message))
+        # Construct command message
+        message = {}
 
-            # Construct command message
-            message = {}
+        if robot.teleop:
+            message["set_leds_colour"] = "blue"
+            if robot.state == RobotState.FORWARDS:
+                left = right = robot.MAX_SPEED
+            elif robot.state == RobotState.BACKWARDS:
+                left = right = -robot.MAX_SPEED
+            elif robot.state == RobotState.LEFT:
+                left = -robot.MAX_SPEED
+                right = robot.MAX_SPEED
+            elif robot.state == RobotState.RIGHT:
+                left = robot.MAX_SPEED
+                right = -robot.MAX_SPEED
+            elif robot.state == RobotState.STOP:
+                left = right = 0
+        else:
+            # Autonomous mode
+            left = right = robot.MAX_SPEED / 2
 
-            if robot.teleop:
-                message["set_leds_colour"] = "blue"
-                if robot.state == RobotState.FORWARDS:
-                    left = right = robot.MAX_SPEED
-                elif robot.state == RobotState.BACKWARDS:
-                    left = right = -robot.MAX_SPEED
-                elif robot.state == RobotState.LEFT:
-                    left = -robot.MAX_SPEED
-                    right = robot.MAX_SPEED
-                elif robot.state == RobotState.RIGHT:
-                    left = robot.MAX_SPEED
-                    right = -robot.MAX_SPEED
-                elif robot.state == RobotState.STOP:
-                    left = right = 0
+            for i, reading in enumerate(robot.ir_readings):
+                if reading > robot.ir_threshold:
+                    # Set wheel speeds to avoid detected obstacles
+                    left += robot.weights_left[i] * reading
+                    right += robot.weights_right[i] * reading
+
+            # Set Pi-puck RGB LEDs based on battery voltage
+            if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
+                message["set_leds_colour"] = "red"
             else:
-                # Autonomous mode
-                left = right = robot.MAX_SPEED / 2
+                message["set_leds_colour"] = "green"
 
-                for i, reading in enumerate(robot.ir_readings):
-                    if reading > robot.ir_threshold:
-                        # Set wheel speeds to avoid detected obstacles
-                        left += robot.weights_left[i] * reading
-                        right += robot.weights_right[i] * reading
+            # Clamp wheel speeds between min/max values
+            if left > robot.MAX_SPEED:
+                left = robot.MAX_SPEED
+            elif left < -robot.MAX_SPEED:
+                left = -robot.MAX_SPEED
 
-                # Set Pi-puck RGB LEDs based on battery voltage
-                if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
-                    message["set_leds_colour"] = "red"
-                else:
-                    message["set_leds_colour"] = "green"
+            if right > robot.MAX_SPEED:
+                right = robot.MAX_SPEED
+            elif right < -robot.MAX_SPEED:
+                right = -robot.MAX_SPEED
 
-                # Clamp wheel speeds between min/max values
-                if left > robot.MAX_SPEED:
-                    left = robot.MAX_SPEED
-                elif left < -robot.MAX_SPEED:
-                    left = -robot.MAX_SPEED
+        message["set_motor_speeds"] = {}
+        message["set_motor_speeds"]["left"] = left
+        message["set_motor_speeds"]["right"] = right
 
-                if right > robot.MAX_SPEED:
-                    right = robot.MAX_SPEED
-                elif right < -robot.MAX_SPEED:
-                    right = -robot.MAX_SPEED
-
-            message["set_motor_speeds"] = {}
-            message["set_motor_speeds"]["left"] = left
-            message["set_motor_speeds"]["right"] = right
-
-            # Send command message
-            await websocket.send(json.dumps(message))
+        # Send command message
+        await robot.connection.send(json.dumps(message))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
