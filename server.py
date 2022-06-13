@@ -368,6 +368,7 @@ async def handler(websocket):
                     reply[id]["tasks"][task_id] = {}
                     reply[id]["tasks"][task_id]["range"] = task.range
                     reply[id]["tasks"][task_id]["bearing"] = task.bearing
+                    reply[id]["tasks"][task_id]["workers"] = task.workers
 
             send_reply = True
 
