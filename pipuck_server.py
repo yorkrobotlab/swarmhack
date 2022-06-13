@@ -29,7 +29,7 @@ async def handler(websocket):
             charging, voltage, percentage = pipuck.get_battery_state("epuck")
             reply["battery"] = {}
             reply["battery"]["voltage"] = voltage
-            reply["battery"]["percentage"] = percentage
+            reply["battery"]["percentage"] = int(percentage * 100)
             send_reply = True
 
         # Send reply, if requested
