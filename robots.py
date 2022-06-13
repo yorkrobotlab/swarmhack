@@ -73,5 +73,5 @@ monas = {
 robots = {**pipucks, **monas}
 
 server_york = "144.32.165.233"
-server_sheffield = ""
+server_sheffield = "144.32.165.175"
 server_manchester = ""
