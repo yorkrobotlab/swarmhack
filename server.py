@@ -41,7 +41,6 @@ class Tag:
                               int((self.tl.y + self.tr.y) / 2))
 
         # Calculate orientation of tag
-        # self.angle = math.degrees(math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x)) # Angle between forward vector and x-axis
         self.forward = math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x) # Forward vector
         self.angle = math.degrees(self.forward) # Angle between forward vector and x-axis
 
@@ -67,6 +66,7 @@ class Task:
         self.workers = workers
         self.position = position
         self.radius = radius
+        self.delete = False
 
 class Tracker(threading.Thread):
 
@@ -80,7 +80,6 @@ class Tracker(threading.Thread):
         self.max_x = 0 # In pixels
         self.max_y = 0 # In pixels
         self.centre = Vector2D(0, 0) # In metres
-        # self.corner_distance_metres = 1.78 # Euclidean distance between corner tags in metres
         self.corner_distance_metres = 2.06 # Euclidean distance between corner tags in metres
         self.corner_distance_pixels = 0
         self.scale_factor = 0
@@ -176,6 +175,9 @@ class Tracker(threading.Thread):
                     # Iterate over tasks
                     for task_id, task in self.tasks.items():
 
+                        task.robots = []
+
+                        # Check whether robot is within range
                         for robot_id, robot in self.robots.items():
                             distance = task.position.distance_to(robot.position)
 
@@ -187,12 +189,21 @@ class Tracker(threading.Thread):
 
                                 robot.tasks[task_id] = SensorReading(distance, normalised_bearing)
 
+                            if distance < task.radius:
+                                task.robots.append(robot_id)
+
+                        print(f"Task {task_id} - workers: {task.workers}, robots: {task.robots}")
+                            
+                        if len(task.robots) >= task.workers:
+                            task.delete = True
+
                         colour = red
 
                         # Draw task boundary
                         pixel_radius = int(task.radius * self.scale_factor)
                         x = int(task.position.x * self.scale_factor)
                         y = int(task.position.y * self.scale_factor)
+                        cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
                         cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
 
                         # Draw task ID
@@ -205,7 +216,9 @@ class Tracker(threading.Thread):
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
-
+                    for task_id in list(self.tasks.keys()):
+                        if self.tasks[task_id].delete:
+                            del self.tasks[task_id]
 
                     # Draw boundary of virtual environment based on corner tag positions
                     cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
@@ -238,9 +251,6 @@ class Tracker(threading.Thread):
                         # Draw circle on centre point
                         cv2.circle(image, (tag.centre.x, tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
 
-                        # Draw line from centre point to front of tag
-                        cv2.line(image, (tag.centre.x, tag.centre.y), (tag.front.x, tag.front.y), red, 2, lineType=cv2.LINE_AA)
-
                         # Draw robot's sensor range
                         sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
                         cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
@@ -248,11 +258,17 @@ class Tracker(threading.Thread):
                         # Draw lines between robots if they are within sensor range
                         for neighbour_id in robot.neighbours.keys():
                             neighbour = self.robots[neighbour_id]
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 2, lineType=cv2.LINE_AA)
+                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
+                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 3, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
                         tag = robot.tag
+
+                        # Draw line from centre point to front of tag
+                        forward_point = ((tag.front - tag.centre) * 2) + tag.centre
+                        cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), black, 10, lineType=cv2.LINE_AA)
+                        cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
 
                         # Draw tag ID
                         text = str(tag.id)
