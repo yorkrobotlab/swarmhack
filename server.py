@@ -57,10 +57,11 @@ class Robot:
         self.tasks = {}
 
 class SensorReading:
-    def __init__(self, range, bearing, orientation=0):
+    def __init__(self, range, bearing, orientation=0, workers=0):
         self.range = range
         self.bearing = bearing
         self.orientation = orientation
+        self.workers = workers
 
 class Task:
     def __init__(self, id, workers, position, radius, time_limit):
@@ -255,7 +256,7 @@ class Tracker(threading.Thread):
                                 relative_bearing = absolute_bearing - robot.orientation
                                 normalised_bearing = angles.normalize(relative_bearing, -180, 180)
 
-                                robot.tasks[task_id] = SensorReading(distance, normalised_bearing)
+                                robot.tasks[task_id] = SensorReading(distance, normalised_bearing, workers=task.workers)
 
                             if distance < task.radius:
                                 task.robots.append(robot_id)
@@ -333,20 +334,14 @@ class Tracker(threading.Thread):
                 sys.exit()
 
 async def handler(websocket):
-    print("starting handler")
     async for packet in websocket:
-        print("received packet")
-        print(packet)
         message = json.loads(packet)
-
-        print(message)
         
         # Process any requests received
         reply = {}
         send_reply = False
 
         if "check_awake" in message:
-            print("CHECK AWAKE")
             reply["awake"] = True
             send_reply = True
 
