@@ -17,6 +17,7 @@ red = (0, 0, 255)
 green = (0, 255, 0)
 magenta = (255, 0, 255)
 cyan = (255, 255, 0)
+yellow = (50, 255, 255)
 black = (0, 0, 0)
 white = (255, 255, 255)
 
@@ -66,7 +67,7 @@ class Task:
         self.workers = workers
         self.position = position
         self.radius = radius
-        self.delete = False
+        self.completed = False
 
 class Tracker(threading.Thread):
 
@@ -86,6 +87,7 @@ class Tracker(threading.Thread):
         self.robots = {}
         self.tasks = {}
         self.task_counter = 0
+        self.score = 0
 
     def run(self):
         while True:        
@@ -195,7 +197,7 @@ class Tracker(threading.Thread):
                         print(f"Task {task_id} - workers: {task.workers}, robots: {task.robots}")
                             
                         if len(task.robots) >= task.workers:
-                            task.delete = True
+                            task.completed = True
 
                         colour = red
 
@@ -216,8 +218,11 @@ class Tracker(threading.Thread):
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
+                    # Delete completed tasks
                     for task_id in list(self.tasks.keys()):
-                        if self.tasks[task_id].delete:
+                        task = self.tasks[task_id]
+                        if task.completed:
+                            self.score = self.score + task.workers
                             del self.tasks[task_id]
 
                     # Draw boundary of virtual environment based on corner tag positions
@@ -279,6 +284,16 @@ class Tracker(threading.Thread):
                         position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+
+
+                    text = f"Score: {self.score}"
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 2
+                    thickness = 5
+                    textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                    position = (10, 60)
+                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
