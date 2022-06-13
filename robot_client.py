@@ -249,11 +249,11 @@ async def send_commands(robot):
             elif robot.state == RobotState.BACKWARDS:
                 left = right = -robot.MAX_SPEED
             elif robot.state == RobotState.LEFT:
-                left = -robot.MAX_SPEED
-                right = robot.MAX_SPEED
+                left = -robot.MAX_SPEED / 2
+                right = robot.MAX_SPEED / 2
             elif robot.state == RobotState.RIGHT:
-                left = robot.MAX_SPEED
-                right = -robot.MAX_SPEED
+                left = robot.MAX_SPEED / 2
+                right = -robot.MAX_SPEED / 2
             elif robot.state == RobotState.STOP:
                 left = right = 0
         else:
