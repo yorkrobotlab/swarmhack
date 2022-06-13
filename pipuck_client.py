@@ -39,7 +39,7 @@ def kill_now() -> bool:
 
 server_address = "localhost"
 server_port = 6000
-robot_port = 5000
+robot_port = 80
 
 ip_addresses = {
     1:  "144.32.165.227",
@@ -188,10 +188,12 @@ async def get_server_data():
 
                     robots[id].orientation = robot["orientation"]
                     robots[id].neighbours = robot["neighbours"]
+                    robots[id].tasks = robot["tasks"]
                 
                     print(f"Robot {id}")
                     print(f"Orientation: {robots[id].orientation}")
                     print(f"Neighbours = {robots[id].neighbours}")
+                    print(f"Tasks = {robots[id].tasks}")
                     print()
 
     except Exception as e:
@@ -221,7 +223,7 @@ async def get_data(robot):
         async with robot.connection as websocket:
 
             message = {}
-            message["get_ir_reflected"] = True
+            message["get_ir"] = True
             message["get_battery"] = True
 
             # Send request for data and wait for reply
@@ -229,17 +231,15 @@ async def get_data(robot):
             reply_json = await websocket.recv()
             reply = json.loads(reply_json)
 
-            robot.ir_readings = reply["ir_reflected"]
+            robot.ir_readings = reply["ir"]
 
-            robot.battery_charging = reply["battery"]["charging"]
             robot.battery_voltage = reply["battery"]["voltage"]
             robot.battery_percentage = reply["battery"]["percentage"]
 
-            print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
-            print("[Robot {}] Battery: {}, {:.2f}V, {:.2f}%" .format(robot.id,
-                                                              "Charging" if robot.battery_charging else "Discharging",
-                                                              robot.battery_voltage,
-                                                              robot.battery_percentage * 100))
+            # print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
+            # print("[Robot {}] Battery: {:.2f}V, {:.2f}%" .format(robot.id,
+            #                                                      robot.battery_voltage,
+            #                                                      robot.battery_percentage * 100))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -343,7 +343,7 @@ async def send_commands(robot):
                 elif right < -robot.MAX_SPEED:
                     right = -robot.MAX_SPEED
 
-            # left = right = 0
+            left = right = 0
 
             message["set_motor_speeds"] = {}
             message["set_motor_speeds"]["left"] = left
@@ -457,10 +457,10 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # robot_ids = [1, 2] # Specify robots to work with
-    # robot_ids = [1] # Specify robots to work with
+    robot_ids = [1] # Specify robots to work with
     # robot_ids = [2] # Specify robots to work with
     # robot_ids = [6] # Specify robots to work with
-    robot_ids = range(1, 10+1) # Specify robots to work with
+    # robot_ids = range(1, 10+1) # Specify robots to work with
 
     for id in robot_ids:
         robots[id] = Robot(id)
@@ -480,20 +480,20 @@ if __name__ == "__main__":
     # Only communicate with robots that were successfully connected to
     while True:
 
-        print(Fore.GREEN + "[INFO]: Requesting data from server")
+        # print(Fore.GREEN + "[INFO]: Requesting data from server")
         loop.run_until_complete(get_server_data())
 
-        print(Fore.GREEN + "[INFO]: Robots detected:", ids)
+        # print(Fore.GREEN + "[INFO]: Robots detected:", ids)
         
-        print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
+        # print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
         loop.run_until_complete(get_robot_data(ids))
 
         # print(Fore.GREEN + "Processing...")
 
-        print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
+        # print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
         loop.run_until_complete(send_robot_commands(ids))
 
-        print()
+        # print()
 
         # TODO: Close websocket connections
         if kill_now():

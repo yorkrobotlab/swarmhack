@@ -11,6 +11,7 @@ from camera import *
 from virtual_objects import Vector2D
 import itertools
 import random
+import angles
 
 red = (0, 0, 255)
 green = (0, 255, 0)
@@ -40,7 +41,9 @@ class Tag:
                               int((self.tl.y + self.tr.y) / 2))
 
         # Calculate orientation of tag
-        self.angle = math.degrees(math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x)) # Angle between forward vector and x-axis
+        # self.angle = math.degrees(math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x)) # Angle between forward vector and x-axis
+        self.forward = math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x) # Forward vector
+        self.angle = math.degrees(self.forward) # Angle between forward vector and x-axis
 
 class Robot:
     def __init__(self, tag, position):
@@ -50,9 +53,10 @@ class Robot:
         self.orientation = tag.angle
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
+        self.tasks = {}
 
 class SensorReading:
-    def __init__(self, range, bearing, orientation):
+    def __init__(self, range, bearing, orientation=0):
         self.range = range
         self.bearing = bearing
         self.orientation = orientation
@@ -142,6 +146,7 @@ class Tracker(threading.Thread):
 
                 if self.calibrated:
 
+                    # Create any new tasks, if necessary
                     while len(self.tasks) < 3:
                         id = self.task_counter
                         placed = False
@@ -168,7 +173,19 @@ class Tracker(threading.Thread):
                         self.tasks[id] = Task(id, workers, position, radius)
                         self.task_counter = self.task_counter + 1
 
-                    for id, task in self.tasks.items():
+                    # Iterate over tasks
+                    for task_id, task in self.tasks.items():
+
+                        for robot_id, robot in self.robots.items():
+                            distance = task.position.distance_to(robot.position)
+
+                            if distance < robot.sensor_range:
+
+                                absolute_bearing = math.degrees(math.atan2(task.position.y - robot.position.y, task.position.x - robot.position.x))
+                                relative_bearing = absolute_bearing - robot.orientation
+                                normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+
+                                robot.tasks[task_id] = SensorReading(distance, normalised_bearing)
 
                         colour = red
 
@@ -200,11 +217,14 @@ class Tracker(threading.Thread):
 
                             if id != other_id: # Don't check this robot against itself
 
-                                range = math.dist([robot.position.x, robot.position.y], [other_robot.position.x, other_robot.position.y])
+                                range = robot.position.distance_to(other_robot.position)
 
                                 if range < robot.sensor_range:
-                                    bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
-                                    robot.neighbours[other_id] = SensorReading(range, bearing, other_robot.orientation)
+
+                                    absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
+                                    relative_bearing = absolute_bearing - robot.orientation
+                                    normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+                                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
 
                         # Draw tag
                         tag = robot.tag
@@ -303,12 +323,18 @@ async def handler(websocket):
                 reply[id] = {}
                 reply[id]["orientation"] = robot.orientation
                 reply[id]["neighbours"] = {}
+                reply[id]["tasks"] = {}
 
                 for neighbour_id, neighbour in robot.neighbours.items():
                     reply[id]["neighbours"][neighbour_id] = {}
                     reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
                     reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
                     reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
+
+                for task_id, task in robot.tasks.items():
+                    reply[id]["tasks"][task_id] = {}
+                    reply[id]["tasks"][task_id]["range"] = task.range
+                    reply[id]["tasks"][task_id]["bearing"] = task.bearing
 
             send_reply = True
 
