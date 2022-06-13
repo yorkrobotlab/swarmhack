@@ -20,7 +20,7 @@ def run_command(command, hide_output):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Pi-puck management utilities.')
-	parser.add_argument('utility', choices=['ping', 'ssh-copy-id', 'copy-server', 'shutdown', 'reboot', 'battery'])
+	parser.add_argument('utility', choices=['ping', 'ssh-copy-id', 'copy-server', 'shutdown', 'reboot', 'battery', 'passwd'])
 
 	args = parser.parse_args()
 	if args.utility == 'ping':
@@ -53,5 +53,12 @@ if __name__ == '__main__':
 			if ip != '':
 				print(f'Checking battery on robot {robot_id}...')
 				result = run_command(f'ssh pi@{ip} pi-puck-battery', False)
+				print(f'{robot_id}: {result}')
+				print()
+	elif args.utility == 'passwd':
+		for (robot_id, ip) in robots.pipucks.items():
+			if ip != '':
+				print(f'Changing password on robot {robot_id}...')
+				result = run_command(f'ssh pi@{ip} sudo passwd pi', False)
 				print(f'{robot_id}: {result}')
 				print()
