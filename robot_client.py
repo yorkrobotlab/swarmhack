@@ -9,6 +9,8 @@ import signal
 import time
 import sys
 from enum import Enum
+import time
+import random
 
 import colorama
 from colorama import Fore
@@ -64,9 +66,6 @@ class Robot:
 
     BAT_LOW_VOLTAGE = 3.6
     MAX_SPEED = 100
-    ir_threshold = 300
-    weights_left = [-10, -10, -5, 0, 0, 5, 10, 10]
-    weights_right = [-1 * x for x in weights_left]
 
     def __init__(self, id):
         self.id = id
@@ -81,6 +80,13 @@ class Robot:
         self.battery_charging = False
         self.battery_voltage = 0
         self.battery_percentage = 0
+
+        self.turn_time = time.time()
+
+        if id < 31:
+            self.ir_threshold = 200  # Pi-puck
+        else:
+            self.ir_threshold = 80  # Mona
 
 
 async def connect_to_server():
@@ -99,8 +105,8 @@ async def connect_to_server():
         print("Server did not respond")
 
 
-async def connect_to_robots(ids):
-    for id in ids:
+async def connect_to_robots():
+    for id in active_robots.keys():
         ip = robots[id]
         if ip != '':
             uri = f"ws://{ip}:{robot_port}"
@@ -249,43 +255,50 @@ async def send_commands(robot):
             elif robot.state == RobotState.BACKWARDS:
                 left = right = -robot.MAX_SPEED
             elif robot.state == RobotState.LEFT:
-                left = -robot.MAX_SPEED / 2
-                right = robot.MAX_SPEED / 2
+                left = -robot.MAX_SPEED * 0.8
+                right = robot.MAX_SPEED * 0.8
             elif robot.state == RobotState.RIGHT:
-                left = robot.MAX_SPEED / 2
-                right = -robot.MAX_SPEED / 2
+                left = robot.MAX_SPEED * 0.8
+                right = -robot.MAX_SPEED * 0.8
             elif robot.state == RobotState.STOP:
                 left = right = 0
         else:
             # Autonomous mode
-            left = right = robot.MAX_SPEED / 2
-
-            for i, reading in enumerate(robot.ir_readings):
-                if reading > robot.ir_threshold:
-                    # Set wheel speeds to avoid detected obstacles
-                    left += robot.weights_left[i] * reading
-                    right += robot.weights_right[i] * reading
-
-            # Set Pi-puck RGB LEDs based on battery voltage
-            if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
-                message["set_leds_colour"] = "red"
-            else:
-                message["set_leds_colour"] = "green"
-
-            # Clamp wheel speeds between min/max values
-            if left > robot.MAX_SPEED:
-                left = robot.MAX_SPEED
-            elif left < -robot.MAX_SPEED:
+            if robot.state == RobotState.FORWARDS:
+                left = right = robot.MAX_SPEED
+                if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
+                    robot.turn_time = time.time()
+                    robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
+            elif robot.state == RobotState.BACKWARDS:
+                left = right = -robot.MAX_SPEED
+                robot.turn_time = time.time()
+                robot.state = RobotState.FORWARDS
+            elif robot.state == RobotState.LEFT:
                 left = -robot.MAX_SPEED
-
-            if right > robot.MAX_SPEED:
                 right = robot.MAX_SPEED
-            elif right < -robot.MAX_SPEED:
+                if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
+                    robot.turn_time = time.time()
+                    robot.state = RobotState.FORWARDS
+            elif robot.state == RobotState.RIGHT:
+                left = robot.MAX_SPEED
                 right = -robot.MAX_SPEED
+                if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
+                    robot.turn_time = time.time()
+                    robot.state = RobotState.FORWARDS
+            elif robot.state == RobotState.STOP:
+                left = right = 0
+                robot.turn_time = time.time()
+                robot.state = RobotState.FORWARDS
 
         message["set_motor_speeds"] = {}
         message["set_motor_speeds"]["left"] = left
         message["set_motor_speeds"]["right"] = right
+
+        # Set Pi-puck RGB LEDs based on battery voltage
+        if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
+            message["set_leds_colour"] = "red"
+        else:
+            message["set_leds_colour"] = "green"
 
         # Send command message
         await robot.connection.send(json.dumps(message))
@@ -395,14 +408,17 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Specify robots to work with
-    # robot_ids = range(1, 11)
-    robot_ids = [7]
+    robot_ids = range(1, 41)
+    # robot_ids = [1,31]
 
     for robot_id in robot_ids:
-        active_robots[robot_id] = Robot(robot_id)
+        if robots[robot_id] != '':
+            active_robots[robot_id] = Robot(robot_id)
+        else:
+            print(f"No IP defined for robot {robot_id}")
 
     print(Fore.GREEN + "[INFO]: Connecting to robots")
-    loop.run_until_complete(connect_to_robots(robot_ids))
+    loop.run_until_complete(connect_to_robots())
 
     if not active_robots:
         print(Fore.RED + "[ERROR]: No connection to robots")
