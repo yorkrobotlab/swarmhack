@@ -162,16 +162,16 @@ class Tracker(threading.Thread):
                         for other_id, other_robot in self.robots.items():
 
                             # Don't check this robot against itself, and ignore robots that aren't in our set
-                            if id != other_id and other_id in list(range(id - (id % 5), id + 5 - (id % 5) + 1)):
+                            if id != other_id and other_id in range(x - ((x-1) % 5), x + 5 - ((x-1) % 5)):
 
-                                range = robot.position.distance_to(other_robot.position)
+                                robot_range = robot.position.distance_to(other_robot.position)
 
-                                if range < robot.sensor_range:
+                                if robot_range < robot.sensor_range:
 
                                     absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
                                     relative_bearing = absolute_bearing - robot.orientation
                                     normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-                                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
+                                    robot.neighbours[other_id] = SensorReading(robot_range, normalised_bearing, other_robot.orientation)
 
                         # Draw tag
                         tag = robot.tag
