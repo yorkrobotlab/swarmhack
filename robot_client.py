@@ -24,7 +24,7 @@ colorama.init(autoreset=True)
 #  or specify a custom server IP address as a string.
 # All ports should remain at 80.
 ##
-server_address = server_none
+server_address = server_york
 server_port = 80
 robot_port = 80
 ##
@@ -235,6 +235,21 @@ async def get_server_data():
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
 
+async def send_server_commands(ids):
+    try:
+        message = {}
+        message["draw_vectors"] = {}
+
+        robot_id = ids[0]
+
+        message["draw_vectors"][robot_id] = {}
+        message["draw_vectors"][robot_id]["vector"] = [0.5, 0.2]
+        message["draw_vectors"][robot_id]["colour"] = "red"
+
+        await server_connection.send(json.dumps(message))
+
+    except Exception as e:
+        print(f"{type(e).__name__}: {e}")
 
 # Stop robot from moving and turn off its LEDs
 async def stop_robot(robot):
@@ -448,7 +463,8 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = range(0, 0)
+    # robot_ids = range(0, 0)
+    robot_ids = [36]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
@@ -463,7 +479,7 @@ if __name__ == "__main__":
 
     # Create websockets connections to robots
     print(Fore.GREEN + "[INFO]: Connecting to robots")
-    loop.run_until_complete(connect_to_robots())
+    # loop.run_until_complete(connect_to_robots())
 
     if not active_robots:
         print(Fore.RED + "[ERROR]: No connection to robots")
@@ -480,14 +496,16 @@ if __name__ == "__main__":
         print(Fore.GREEN + "[INFO]: Requesting data from tracking server")
         loop.run_until_complete(get_server_data())
 
-        # Request sensor data from detected robots
-        print(Fore.GREEN + "[INFO]: Robots detected:", ids)
-        print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
-        loop.run_until_complete(get_robot_data(ids))
+        # # Request sensor data from detected robots
+        # print(Fore.GREEN + "[INFO]: Robots detected:", ids)
+        # print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
+        # loop.run_until_complete(get_robot_data(ids))
+        #
+        # # Calculate next step of control algorithm, and send commands to robots
+        # print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
+        # loop.run_until_complete(send_robot_commands(ids))
 
-        # Calculate next step of control algorithm, and send commands to robots
-        print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
-        loop.run_until_complete(send_robot_commands(ids))
+        loop.run_until_complete(send_server_commands(ids))
 
         print()
 
