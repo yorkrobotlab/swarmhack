@@ -55,6 +55,7 @@ class Robot:
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
         self.tasks = {}
+        self.vectors = {}
 
 class SensorReading:
     def __init__(self, range, bearing, orientation=0, workers=0):
