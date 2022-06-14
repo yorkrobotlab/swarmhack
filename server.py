@@ -381,7 +381,8 @@ async def handler(websocket):
             try:
                 all_vectors = message["draw_vectors"] # Dictionary mapping robot IDs to coloured vectors
                 for robot_id, robot_vectors in all_vectors.items():
-                    tracker.robots[robot_id].vectors = robot_vectors # Dictionary of vectors and colours
+                    if robot_id in tracker.robots:
+                        tracker.robots[robot_id].vectors = robot_vectors # Dictionary of vectors and colours
             except (KeyError, ValueError):
                 print("Invalid vector format")
 
