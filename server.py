@@ -204,6 +204,16 @@ class Tracker(threading.Thread):
                         cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), black, 10, lineType=cv2.LINE_AA)
                         cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
 
+                        try:
+                            for coloured_vector in robot.vectors:
+                                vector = coloured_vector["vector"]
+                                colour = coloured_vector["colour"]
+                                vector = Vector2D(0.2, 0) * self.scale_factor # Convert metres to pixels
+                                cv2.line(image, (tag.centre.x, tag.centre.y), (vector.x, vector.y), black, 10, lineType=cv2.LINE_AA)
+                                cv2.line(image, (tag.centre.x, tag.centre.y), (vector.x, vector.y), magenta, 3, lineType=cv2.LINE_AA)
+                        except (KeyError, ValueError):
+                            print("Tried to draw vector in an invalid format")
+
                         # Draw tag ID
                         text = str(tag.id)
                         font = cv2.FONT_HERSHEY_SIMPLEX
@@ -347,6 +357,7 @@ async def handler(websocket):
             send_reply = True
 
         if "get_robots" in message:
+            send_reply = True
 
             for id, robot in tracker.robots.items():
                 reply[id] = {}
@@ -366,7 +377,13 @@ async def handler(websocket):
                     reply[id]["tasks"][task_id]["bearing"] = task.bearing
                     reply[id]["tasks"][task_id]["workers"] = task.workers
 
-            send_reply = True
+        if "draw_vectors" in message:
+            try:
+                all_vectors = message["draw_vectors"] # Dictionary mapping robot IDs to coloured vectors
+                for robot_id, robot_vectors in all_vectors.items():
+                    tracker.robots[robot_id].vectors = robot_vectors # Dictionary of vectors and colours
+            except (KeyError, ValueError):
+                print("Invalid vector format")
 
         # Send reply, if requested
         if send_reply:
