@@ -206,10 +206,11 @@ class Tracker(threading.Thread):
                         cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
 
                         try:
-                            for coloured_vector in robot.vectors:
-                                vector = coloured_vector["vector"]
-                                colour = coloured_vector["colour"]
+                            print(robot.vectors)
+                            for vector, colour in robot.vectors.items():
                                 vector = Vector2D(0.2, 0) * self.scale_factor # Convert metres to pixels
+                                vector.x = int(vector.x)
+                                vector.y = int(vector.y)
                                 cv2.line(image, (tag.centre.x, tag.centre.y), (vector.x, vector.y), black, 10, lineType=cv2.LINE_AA)
                                 cv2.line(image, (tag.centre.x, tag.centre.y), (vector.x, vector.y), magenta, 3, lineType=cv2.LINE_AA)
                         except (KeyError, ValueError):
@@ -379,13 +380,15 @@ async def handler(websocket):
                     reply[id]["tasks"][task_id]["workers"] = task.workers
 
         if "draw_vectors" in message:
-            try:
-                all_vectors = message["draw_vectors"] # Dictionary mapping robot IDs to coloured vectors
-                for robot_id, robot_vectors in all_vectors.items():
-                    if robot_id in tracker.robots:
-                        tracker.robots[robot_id].vectors = robot_vectors # Dictionary of vectors and colours
-            except (KeyError, ValueError):
-                print("Invalid vector format")
+            # try:
+            all_vectors = message["draw_vectors"] # Dictionary mapping robot IDs to coloured vectors
+            print(all_vectors)
+            for robot_id, robot_vectors in all_vectors.items():
+                robot_id = int(robot_id)
+                if robot_id in tracker.robots:
+                    tracker.robots[robot_id].vectors = robot_vectors # Dictionary of vectors and colours
+            # except (KeyError, ValueError):
+            #     print("Invalid vector format")
 
         # Send reply, if requested
         if send_reply:
