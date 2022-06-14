@@ -74,6 +74,8 @@ class Task:
         self.completed = False
         self.failed = False
         self.start_time = time.time()
+        self.arrival_time = time.time()
+        self.completing = False
 
 class Tracker(threading.Thread):
 
@@ -213,6 +215,8 @@ class Tracker(threading.Thread):
                         position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+                        cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(overlay, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
                     # Create any new tasks, if necessary
                     while len(self.tasks) < 3:
@@ -263,31 +267,48 @@ class Tracker(threading.Thread):
                                 task.robots.append(robot_id)
 
                         # print(f"Task {task_id} - workers: {task.workers}, robots: {task.robots}")
-                            
+
+                        time_now = time.time()
+                        
                         if len(task.robots) >= task.workers:
-                            task.completed = True
+                            if not task.completing:
+                                task.completing = True
+                                task.arrival_time = time.time()
+                            elif time_now - task.arrival_time > 5:
+                                task.completed = True
+                        elif task.completing:
+                            task.completing = False
 
                         pixel_radius = int(task.radius * self.scale_factor)
                         x = int(task.position.x * self.scale_factor)
                         y = int(task.position.y * self.scale_factor)
 
                         # Draw task timer
-                        time_now = time.time()
-                        task.elapsed_time = time_now - task.start_time
-                        if task.elapsed_time > 1:
-                            task.start_time = time_now
-                            task.counter = task.counter - 1
-                            if task.counter <= 1:
-                                task.failed = True
+                        if not task.completing:
+                            task.elapsed_time = time_now - task.start_time
+                            if task.elapsed_time > 1:
+                                task.start_time = time_now
+                                task.counter = task.counter - 1
+                                if task.counter <= 1:
+                                    task.failed = True
+
                         cv2.circle(overlay, (x, y), int((pixel_radius / task.time_limit) * task.counter), cyan, -1, lineType=cv2.LINE_AA)
 
-                        colour = red
+                        if task.completing:
+                            cv2.ellipse(overlay, (x, y), (pixel_radius, pixel_radius), 0, -90, -90 + (((time_now - task.arrival_time) / 5) * 360), green, cv2.FILLED)
+
+                        if task.completing:
+                            colour = green
+                        else:
+                            colour = red
 
                         # Draw task boundary
                         cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
                         cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
+                        cv2.circle(overlay, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
+                        cv2.circle(overlay, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
 
-                        # Draw task ID
+                        # Draw task workers
                         text = str(task.workers)
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         font_scale = 1.5
@@ -296,6 +317,8 @@ class Tracker(threading.Thread):
                         position = (int(x - textsize[0]/2), int(y + textsize[1]/2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+                        cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(overlay, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
                     # Delete completed tasks
                     for task_id in list(self.tasks.keys()):
@@ -303,10 +326,12 @@ class Tracker(threading.Thread):
                         if task.completed:
                             self.score = self.score + task.workers
                             del self.tasks[task_id]
+                            print("completed", task_id)
                         elif task.failed:
                             del self.tasks[task_id]
+                            print("failed", task_id)
 
-
+                    # Draw the score
                     text = f"Score: {self.score}"
                     font = cv2.FONT_HERSHEY_SIMPLEX
                     font_scale = 2
@@ -315,6 +340,8 @@ class Tracker(threading.Thread):
                     position = (10, 60)
                     cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                     cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
