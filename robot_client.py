@@ -98,6 +98,7 @@ class Robot:
 
         self.orientation = 0
         self.neighbours = {}
+        self.tasks = {}
 
         self.teleop = False
         self.state = RobotState.STOP
@@ -203,7 +204,7 @@ async def message_robots(ids, function):
     await asyncio.gather(*tasks)
 
 
-# Get all robots' virtual sensor data from the tracking server
+# Get robots' virtual sensor data from the tracking server, for our active robots
 async def get_server_data():
     try:
         global ids
@@ -214,24 +215,22 @@ async def get_server_data():
         reply_json = await server_connection.recv()
         reply = json.loads(reply_json)
 
-        # Get returned list of IDs as ints
-        ids = list(reply.keys())
-        ids = [int(id) for id in ids]
+        # Filter reply from the server, based on our active robots of interest
+        filtered_reply = {int(k): v for (k, v) in reply.items() if int(k) in active_robots.keys()}
 
-        # Loop through robots that the server is tracking
-        for key, robot in reply.items():
-            id = int(key)
-            # Filter based on our active robots of interest
-            if id in active_robots.keys():
-                # Receive robot virtual sensor data from the server
-                active_robots[id].orientation = robot["orientation"]
-                active_robots[id].neighbours = robot["neighbours"]
-                active_robots[id].tasks = robot["tasks"]
-                print(f"Robot {id}")
-                print(f"Orientation = {active_robots[id].orientation}")
-                print(f"Neighbours = {active_robots[id].neighbours}")
-                print(f"Tasks = {active_robots[id].tasks}")
-                print()
+        ids = filtered_reply.keys()
+
+        # Receive robot virtual sensor data from the server
+        for id, robot in filtered_reply.items():
+            active_robots[id].orientation = robot["orientation"]
+            # Filter out any neighbours that aren't our active robots
+            active_robots[id].neighbours = {k: v for (k, v) in robot["neighbours"].items() if int(k) in active_robots.keys()}
+            active_robots[id].tasks = robot["tasks"]
+            print(f"Robot {id}")
+            print(f"Orientation = {active_robots[id].orientation}")
+            print(f"Neighbours = {active_robots[id].neighbours}")
+            print(f"Tasks = {active_robots[id].tasks}")
+            print()
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
