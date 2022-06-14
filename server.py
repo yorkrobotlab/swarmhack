@@ -52,7 +52,7 @@ class Robot:
         self.id = tag.id
         self.position = position
         self.orientation = tag.angle
-        self.sensor_range = 0.3 # 30cm sensing radius
+        self.sensor_range = 0.25 # 30cm sensing radius
         self.neighbours = {}
         self.tasks = {}
 
@@ -101,6 +101,12 @@ class Tracker(threading.Thread):
         while True:        
             image = self.camera.get_frame()
             overlay = image.copy()
+
+            # Logo
+            logo_image = cv2.imread("swarmhack_arena_logo.png")
+            logo_image = ~logo_image  # Invert image
+            logo_image_text = cv2.imread("swarmhack_arena_logo_text.png")
+            logo_image_text = ~logo_image_text  # Invert image
             
             aruco_dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100)
             aruco_parameters = cv2.aruco.DetectorParameters_create()
@@ -156,7 +162,13 @@ class Tracker(threading.Thread):
                 if self.calibrated:
 
                     # Draw boundary of virtual environment based on corner tag positions
-                    cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
+                    # cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
+
+                    for id, robot in self.robots.items():
+
+                        tag = robot.tag
+
+                        cv2.circle(image, (tag.centre.x, tag.centre.y), 24, black, -1, lineType=cv2.LINE_AA)
             
                     # Process robots
                     for id, robot in self.robots.items():
@@ -164,7 +176,7 @@ class Tracker(threading.Thread):
                         for other_id, other_robot in self.robots.items():
 
                             # Don't check this robot against itself, and ignore robots that aren't in our set
-                            if id != other_id and other_id in range(id - ((id-1) % 5), id + 5 - ((id-1) % 5)):
+                            if id != other_id and not (id == 3 and other_id == 31) and not (id == 31 or other_id == 3):
 
                                 robot_range = robot.position.distance_to(other_robot.position)
 
@@ -179,47 +191,49 @@ class Tracker(threading.Thread):
                         tag = robot.tag
 
                         # Draw border of tag
-                        cv2.line(image, (tag.tl.x, tag.tl.y), (tag.tr.x, tag.tr.y), green, 1, lineType=cv2.LINE_AA)
-                        cv2.line(image, (tag.tr.x, tag.tr.y), (tag.br.x, tag.br.y), green, 1, lineType=cv2.LINE_AA)
-                        cv2.line(image, (tag.br.x, tag.br.y), (tag.bl.x, tag.bl.y), green, 1, lineType=cv2.LINE_AA)
-                        cv2.line(image, (tag.bl.x, tag.bl.y), (tag.tl.x, tag.tl.y), green, 1, lineType=cv2.LINE_AA)
+                        # cv2.line(image, (tag.tl.x, tag.tl.y), (tag.tr.x, tag.tr.y), green, 1, lineType=cv2.LINE_AA)
+                        # cv2.line(image, (tag.tr.x, tag.tr.y), (tag.br.x, tag.br.y), green, 1, lineType=cv2.LINE_AA)
+                        # cv2.line(image, (tag.br.x, tag.br.y), (tag.bl.x, tag.bl.y), green, 1, lineType=cv2.LINE_AA)
+                        # cv2.line(image, (tag.bl.x, tag.bl.y), (tag.tl.x, tag.tl.y), green, 1, lineType=cv2.LINE_AA)
                         
                         # Draw circle on centre point
-                        cv2.circle(image, (tag.centre.x, tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
+                        # cv2.circle(image, (tag.centre.x, tag.centre.y), 20, red, -1, lineType=cv2.LINE_AA)
 
                         # Draw robot's sensor range
-                        sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
-                        cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
+                        # sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
+                        # cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
 
                         # Draw lines between robots if they are within sensor range
                         for neighbour_id in robot.neighbours.keys():
                             neighbour = self.robots[neighbour_id]
                             cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 3, lineType=cv2.LINE_AA)
+                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), green, 3, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
                         tag = robot.tag
 
+                        cv2.circle(image, (tag.centre.x, tag.centre.y), 20, green, -1, lineType=cv2.LINE_AA)
+
                         # Draw line from centre point to front of tag
-                        forward_point = ((tag.front - tag.centre) * 2) + tag.centre
-                        cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), black, 10, lineType=cv2.LINE_AA)
-                        cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
+                        # forward_point = ((tag.front - tag.centre) * 2) + tag.centre
+                        # cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), black, 10, lineType=cv2.LINE_AA)
+                        # cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
 
                         # Draw tag ID
-                        text = str(tag.id)
-                        font = cv2.FONT_HERSHEY_SIMPLEX
-                        font_scale = 1.5
-                        thickness = 4
-                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                        position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
-                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
-                        cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(overlay, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+                        # text = str(tag.id)
+                        # font = cv2.FONT_HERSHEY_SIMPLEX
+                        # font_scale = 1.5
+                        # thickness = 4
+                        # textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                        # position = (int(tag.centre.x - textsize[0]/2), int(tag.centre.y + textsize[1]/2))
+                        # cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        # cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+                        # cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        # cv2.putText(overlay, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
                     # Create any new tasks, if necessary
-                    while len(self.tasks) < 3:
+                    while len(self.tasks) < 0:
                         id = self.task_counter
                         placed = False
                         while not placed:
@@ -332,20 +346,23 @@ class Tracker(threading.Thread):
                             print("failed", task_id)
 
                     # Draw the score
-                    text = f"Score: {self.score}"
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    font_scale = 2
-                    thickness = 5
-                    textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                    position = (10, 60)
-                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
-                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(overlay, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    # text = f"Score: {self.score}"
+                    # font = cv2.FONT_HERSHEY_SIMPLEX
+                    # font_scale = 2
+                    # thickness = 5
+                    # textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                    # position = (10, 60)
+                    # cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    # cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    # cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    # cv2.putText(overlay, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
-                    image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
+                    # image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
+                    # image = cv2.addWeighted(image, 0.5, logo_image, 0.5, 0)
+                    # image = cv2.subtract(image, logo_image)
+                    image = cv2.subtract(image, logo_image_text)
 
             window_name = 'SwarmHack'
 
