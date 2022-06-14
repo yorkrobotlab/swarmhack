@@ -218,7 +218,7 @@ async def get_server_data():
         # Filter reply from the server, based on our active robots of interest
         filtered_reply = {int(k): v for (k, v) in reply.items() if int(k) in active_robots.keys()}
 
-        ids = filtered_reply.keys()
+        ids = list(filtered_reply.keys())
 
         # Receive robot virtual sensor data from the server
         for id, robot in filtered_reply.items():
