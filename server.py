@@ -162,7 +162,7 @@ class Tracker(threading.Thread):
                         for other_id, other_robot in self.robots.items():
 
                             # Don't check this robot against itself, and ignore robots that aren't in our set
-                            if id != other_id and other_id in range(x - ((x-1) % 5), x + 5 - ((x-1) % 5)):
+                            if id != other_id and other_id in range(id - ((id-1) % 5), id + 5 - ((id-1) % 5)):
 
                                 robot_range = robot.position.distance_to(other_robot.position)
 
