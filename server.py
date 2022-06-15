@@ -52,7 +52,7 @@ class Robot:
         self.id = tag.id
         self.position = position
         self.orientation = tag.angle
-        self.sensor_range = 0.25 # 30cm sensing radius
+        self.sensor_range = 0.24 # 30cm sensing radius
         self.neighbours = {}
         self.tasks = {}
 
