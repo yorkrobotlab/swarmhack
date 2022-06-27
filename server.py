@@ -7,16 +7,21 @@ from camera import *
 from vector2d import Vector2D
 import itertools
 import random
-import angles
 import time
+from enum import Enum
 
 red = (0, 0, 255)
+blue = (255, 100, 0)
 green = (0, 255, 0)
 magenta = (255, 0, 255)
 cyan = (255, 255, 0)
 yellow = (50, 255, 255)
 black = (0, 0, 0)
 white = (255, 255, 255)
+
+class Team(Enum):
+    RED = 1
+    BLUE = 2
 
 class Tag:
     def __init__(self, id, raw_tag):
@@ -62,6 +67,7 @@ class Task:
         self.start_time = time.time()
         self.arrival_time = time.time()
         self.completing = False
+        self.team = None
 
 class Tracker():
 
@@ -80,7 +86,8 @@ class Tracker():
         self.robots = {}
         self.tasks = {}
         self.task_counter = 0
-        self.score = 0
+        self.score_red = 0 # Even
+        self.score_blue = 0 # Odd
 
     def run(self):
         while True:        
@@ -156,7 +163,7 @@ class Tracker():
                         cv2.line(image, (tag.bl.x, tag.bl.y), (tag.tl.x, tag.tl.y), green, 1, lineType=cv2.LINE_AA)
                         
                         # Draw circle on centre point
-                        cv2.circle(image, (tag.centre.x, tag.centre.y), 35, red, -1, lineType=cv2.LINE_AA)
+                        cv2.circle(image, (tag.centre.x, tag.centre.y), 35, red if (id % 2 == 0) else blue, -1, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
@@ -210,19 +217,27 @@ class Tracker():
                     # Iterate over tasks
                     for task_id, task in self.tasks.items():
 
-                        task.robots = []
+                        task.red_robots = set()
+                        task.blue_robots = set()
 
                         # Check whether robot is within range
                         for robot_id, robot in self.robots.items():
                             distance = task.position.distance_to(robot.position)
 
                             if distance < task.radius:
-                                task.robots.append(robot_id)
+                                if robot_id % 2 == 0:
+                                    task.red_robots.add(robot_id)
+                                else:
+                                    task.blue_robots.add(robot_id)
 
                         time_now = time.time()
                         
-                        if len(task.robots) >= task.workers:
+                        if len(task.red_robots) >= task.workers or len(task.blue_robots) >= task.workers:
                             if not task.completing:
+                                if len(task.red_robots) > len(task.blue_robots):
+                                    task.team = Team.RED
+                                else:
+                                    task.team = Team.BLUE
                                 task.completing = True
                                 task.arrival_time = time.time()
                             elif time_now - task.arrival_time > 5:
@@ -251,7 +266,7 @@ class Tracker():
                         if task.completing:
                             colour = green
                         else:
-                            colour = red
+                            colour = magenta
 
                         # Draw task boundary
                         cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
@@ -275,22 +290,33 @@ class Tracker():
                     for task_id in list(self.tasks.keys()):
                         task = self.tasks[task_id]
                         if task.completed:
-                            self.score = self.score + task.workers
+                            if task.team == Team.RED:
+                                self.score_red = self.score_red + task.workers
+                            else: # task.team == Team.BLUE:
+                                self.score_blue = self.score_blue + task.workers
+
                             del self.tasks[task_id]
                         elif task.failed:
                             del self.tasks[task_id]
 
                     # Draw the score
-                    text = f"Score: {self.score}"
+                    text = f"Score: {self.score_red}"
                     font = cv2.FONT_HERSHEY_SIMPLEX
                     font_scale = 2
                     thickness = 5
                     textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                     position = (10, 60)
                     cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
                     cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(overlay, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
+
+                    position = (10, 130)
+                    text = f"Score: {self.score_blue}"
+                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, blue, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, blue, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
