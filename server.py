@@ -90,7 +90,8 @@ class Tracker():
         self.score_blue = 0 # Odd
         self.start_time = time.time()
         self.running = False
-        self.time_limit = 10
+        self.time_limit = 180
+        self.task_last_placed = time.time()
 
     def run(self):
         while True:
@@ -196,32 +197,35 @@ class Tracker():
                     if self.running:
 
                         # Create any new tasks, if necessary
-                        while len(self.tasks) < 10:
-                            id = self.task_counter
-                            placed = False
-                            while not placed:
-                                overlaps = False
-                                workers = random.randint(1, 2)
-                                radius = math.sqrt(workers) * 0.1
-                                min_x_metres = self.min_x / self.scale_factor
-                                max_x_metres = self.max_x / self.scale_factor
-                                min_y_metres = self.min_y / self.scale_factor
-                                max_y_metres = self.max_y / self.scale_factor
-                                x = random.uniform(min_x_metres + radius, max_x_metres - radius)
-                                y = random.uniform(min_y_metres + radius, max_y_metres - radius)
-                                position = Vector2D(x, y) # In metres
+                        if len(self.tasks) < 10:
+                            time_now = time.time()
+                            if time_now - self.task_last_placed > random.randint(1, 10):
+                                id = self.task_counter
+                                placed = False
+                                while not placed:
+                                    overlaps = False
+                                    workers = random.randint(1, 2)
+                                    radius = math.sqrt(workers) * 0.1
+                                    min_x_metres = self.min_x / self.scale_factor
+                                    max_x_metres = self.max_x / self.scale_factor
+                                    min_y_metres = self.min_y / self.scale_factor
+                                    max_y_metres = self.max_y / self.scale_factor
+                                    x = random.uniform(min_x_metres + radius, max_x_metres - radius)
+                                    y = random.uniform(min_y_metres + radius, max_y_metres - radius)
+                                    position = Vector2D(x, y) # In metres
 
-                                for other_task in self.tasks.values():
-                                    overlap = radius + other_task.radius
-                                    if position.distance_to(other_task.position) < overlap:
-                                        overlaps = True
-                                
-                                if not overlaps:
-                                    placed = True
+                                    for other_task in self.tasks.values():
+                                        overlap = radius + other_task.radius
+                                        if position.distance_to(other_task.position) < overlap:
+                                            overlaps = True
+                                    
+                                    if not overlaps:
+                                        placed = True
+                                        self.task_last_placed = time_now
 
-                            time_limit = 20 * workers # 20 seconds per robot
-                            self.tasks[id] = Task(id, workers, position, radius, time_limit)
-                            self.task_counter = self.task_counter + 1
+                                time_limit = 20 * workers # 20 seconds per robot
+                                self.tasks[id] = Task(id, workers, position, radius, time_limit)
+                                self.task_counter = self.task_counter + 1
 
                         # Iterate over tasks
                         for task_id, task in self.tasks.items():
@@ -337,9 +341,9 @@ class Tracker():
                     textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                     position = (image.shape[1] - textsize[0] - 10, 60)
                     cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(image, text, position, font, font_scale, magenta, thickness, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, yellow, thickness, cv2.LINE_AA)
                     cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(overlay, text, position, font, font_scale, magenta, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, yellow, thickness, cv2.LINE_AA)
 
                     if self.running:
                         colour = green
