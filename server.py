@@ -288,7 +288,7 @@ class Tracker():
                             cv2.circle(overlay, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
 
                             # Draw task workers
-                            text = str(task.workers)
+                            text = str(task.workers * 5)
                             font = cv2.FONT_HERSHEY_SIMPLEX
                             font_scale = 1.5
                             thickness = 4
@@ -304,9 +304,9 @@ class Tracker():
                             task = self.tasks[task_id]
                             if task.completed:
                                 if task.team == Team.RED:
-                                    self.score_red = self.score_red + task.workers
+                                    self.score_red = self.score_red + (task.workers * 5)
                                 else: # task.team == Team.BLUE:
-                                    self.score_blue = self.score_blue + task.workers
+                                    self.score_blue = self.score_blue + (task.workers * 5)
 
                                 del self.tasks[task_id]
                             elif task.failed:
