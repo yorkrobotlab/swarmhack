@@ -90,12 +90,13 @@ class Tracker():
         self.score_blue = 0 # Odd
         self.start_time = time.time()
         self.running = False
+        self.time_limit = 10
 
     def run(self):
         while True:
 
-            if self.running == False:
-                self.start_time = time.time()
+            if self.running and (time.time() - self.start_time > self.time_limit):
+                self.running = False
 
             image = self.camera.get_frame()
             overlay = image.copy()
@@ -327,16 +328,32 @@ class Tracker():
                     cv2.putText(overlay, text, position, font, font_scale, blue, thickness, cv2.LINE_AA)
 
                     # Draw the timer
-                    time_remaining = int(180 + self.start_time - time.time())
+                    time_remaining = 0
+                    if self.running:
+                        time_remaining = int(self.time_limit + self.start_time - time.time())
                     mins, secs = divmod(time_remaining, 60)
                     timer = '{:02d}:{:02d}'.format(mins, secs)
                     text = f"Timer: {timer}"
                     textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                     position = (image.shape[1] - textsize[0] - 10, 60)
                     cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, magenta, thickness, cv2.LINE_AA)
                     cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(overlay, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, magenta, thickness, cv2.LINE_AA)
+
+                    if self.running:
+                        colour = green
+                        text = f"GO"
+                    else:
+                        colour = red
+                        text = f"STOP"
+
+                    textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                    position = (int(image.shape[1]/2 - textsize[0]/2), 60)
+                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
@@ -355,14 +372,18 @@ class Tracker():
             key = cv2.waitKey(1)
 
             if key == ord('p'):
-                self.running = True                    
+                if self.running == False:
+                    self.running = True
+                    self.score_red = 0
+                    self.score_blue = 0
+                    self.tasks = {}
+                    self.start_time = time.time()
 
             if key == ord('r'):
+                self.running = False
                 self.score_red = 0
                 self.score_blue = 0
-                self.start_time = time.time()
                 self.tasks = {}
-                self.running = False
 
             if key == ord('q'):
                 sys.exit()
