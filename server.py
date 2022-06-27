@@ -11,7 +11,7 @@ import time
 from enum import Enum
 
 red = (0, 0, 255)
-blue = (255, 100, 0)
+blue = (255, 150, 0)
 green = (0, 255, 0)
 magenta = (255, 0, 255)
 cyan = (255, 255, 0)
