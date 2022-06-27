@@ -352,11 +352,13 @@ class Tracker():
                         colour = red
                         text = f"STOP"
 
+                    font_scale = 3
+                    thickness = 10
                     textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                    position = (int(image.shape[1]/2 - textsize[0]/2), 60)
-                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    position = (int(image.shape[1]/2 - textsize[0]/2), textsize[1] + 30)
+                    cv2.putText(image, text, position, font, font_scale, black, thickness * 2, cv2.LINE_AA)
                     cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
-                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 2, cv2.LINE_AA)
                     cv2.putText(overlay, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
