@@ -89,9 +89,14 @@ class Tracker():
         self.score_red = 0 # Even
         self.score_blue = 0 # Odd
         self.start_time = time.time()
+        self.running = False
 
     def run(self):
-        while True:        
+        while True:
+
+            if self.running == False:
+                self.start_time = time.time()
+
             image = self.camera.get_frame()
             overlay = image.copy()
             
@@ -187,118 +192,120 @@ class Tracker():
                         cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(overlay, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
-                    # Create any new tasks, if necessary
-                    while len(self.tasks) < 10:
-                        id = self.task_counter
-                        placed = False
-                        while not placed:
-                            overlaps = False
-                            workers = random.randint(1, 2)
-                            radius = math.sqrt(workers) * 0.1
-                            min_x_metres = self.min_x / self.scale_factor
-                            max_x_metres = self.max_x / self.scale_factor
-                            min_y_metres = self.min_y / self.scale_factor
-                            max_y_metres = self.max_y / self.scale_factor
-                            x = random.uniform(min_x_metres + radius, max_x_metres - radius)
-                            y = random.uniform(min_y_metres + radius, max_y_metres - radius)
-                            position = Vector2D(x, y) # In metres
+                    if self.running:
 
-                            for other_task in self.tasks.values():
-                                overlap = radius + other_task.radius
-                                if position.distance_to(other_task.position) < overlap:
-                                    overlaps = True
+                        # Create any new tasks, if necessary
+                        while len(self.tasks) < 10:
+                            id = self.task_counter
+                            placed = False
+                            while not placed:
+                                overlaps = False
+                                workers = random.randint(1, 2)
+                                radius = math.sqrt(workers) * 0.1
+                                min_x_metres = self.min_x / self.scale_factor
+                                max_x_metres = self.max_x / self.scale_factor
+                                min_y_metres = self.min_y / self.scale_factor
+                                max_y_metres = self.max_y / self.scale_factor
+                                x = random.uniform(min_x_metres + radius, max_x_metres - radius)
+                                y = random.uniform(min_y_metres + radius, max_y_metres - radius)
+                                position = Vector2D(x, y) # In metres
+
+                                for other_task in self.tasks.values():
+                                    overlap = radius + other_task.radius
+                                    if position.distance_to(other_task.position) < overlap:
+                                        overlaps = True
+                                
+                                if not overlaps:
+                                    placed = True
+
+                            time_limit = 20 * workers # 20 seconds per robot
+                            self.tasks[id] = Task(id, workers, position, radius, time_limit)
+                            self.task_counter = self.task_counter + 1
+
+                        # Iterate over tasks
+                        for task_id, task in self.tasks.items():
+
+                            task.red_robots = set()
+                            task.blue_robots = set()
+
+                            # Check whether robot is within range
+                            for robot_id, robot in self.robots.items():
+                                distance = task.position.distance_to(robot.position)
+
+                                if distance < task.radius:
+                                    if robot_id % 2 == 0:
+                                        task.red_robots.add(robot_id)
+                                    else:
+                                        task.blue_robots.add(robot_id)
+
+                            time_now = time.time()
                             
-                            if not overlaps:
-                                placed = True
+                            if len(task.red_robots) >= task.workers or len(task.blue_robots) >= task.workers:
+                                if not task.completing:
+                                    if len(task.red_robots) > len(task.blue_robots):
+                                        task.team = Team.RED
+                                    else:
+                                        task.team = Team.BLUE
+                                    task.completing = True
+                                    task.arrival_time = time.time()
+                                elif time_now - task.arrival_time > 5:
+                                    task.completed = True
+                            elif task.completing:
+                                task.completing = False
 
-                        time_limit = 20 * workers # 20 seconds per robot
-                        self.tasks[id] = Task(id, workers, position, radius, time_limit)
-                        self.task_counter = self.task_counter + 1
+                            pixel_radius = int(task.radius * self.scale_factor)
+                            x = int(task.position.x * self.scale_factor)
+                            y = int(task.position.y * self.scale_factor)
 
-                    # Iterate over tasks
-                    for task_id, task in self.tasks.items():
-
-                        task.red_robots = set()
-                        task.blue_robots = set()
-
-                        # Check whether robot is within range
-                        for robot_id, robot in self.robots.items():
-                            distance = task.position.distance_to(robot.position)
-
-                            if distance < task.radius:
-                                if robot_id % 2 == 0:
-                                    task.red_robots.add(robot_id)
-                                else:
-                                    task.blue_robots.add(robot_id)
-
-                        time_now = time.time()
-                        
-                        if len(task.red_robots) >= task.workers or len(task.blue_robots) >= task.workers:
+                            # Draw task timer
                             if not task.completing:
-                                if len(task.red_robots) > len(task.blue_robots):
-                                    task.team = Team.RED
-                                else:
-                                    task.team = Team.BLUE
-                                task.completing = True
-                                task.arrival_time = time.time()
-                            elif time_now - task.arrival_time > 5:
-                                task.completed = True
-                        elif task.completing:
-                            task.completing = False
+                                task.elapsed_time = time_now - task.start_time
+                                if task.elapsed_time > 1:
+                                    task.start_time = time_now
+                                    task.counter = task.counter - 1
+                                    if task.counter <= 1:
+                                        task.failed = True
 
-                        pixel_radius = int(task.radius * self.scale_factor)
-                        x = int(task.position.x * self.scale_factor)
-                        y = int(task.position.y * self.scale_factor)
+                            cv2.circle(overlay, (x, y), int((pixel_radius / task.time_limit) * task.counter), cyan, -1, lineType=cv2.LINE_AA)
 
-                        # Draw task timer
-                        if not task.completing:
-                            task.elapsed_time = time_now - task.start_time
-                            if task.elapsed_time > 1:
-                                task.start_time = time_now
-                                task.counter = task.counter - 1
-                                if task.counter <= 1:
-                                    task.failed = True
+                            if task.completing:
+                                cv2.ellipse(overlay, (x, y), (pixel_radius, pixel_radius), 0, -90, -90 + (((time_now - task.arrival_time) / 5) * 360), green, cv2.FILLED)
 
-                        cv2.circle(overlay, (x, y), int((pixel_radius / task.time_limit) * task.counter), cyan, -1, lineType=cv2.LINE_AA)
+                            if task.completing:
+                                colour = green
+                            else:
+                                colour = magenta
 
-                        if task.completing:
-                            cv2.ellipse(overlay, (x, y), (pixel_radius, pixel_radius), 0, -90, -90 + (((time_now - task.arrival_time) / 5) * 360), green, cv2.FILLED)
+                            # Draw task boundary
+                            cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
+                            cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
+                            cv2.circle(overlay, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
+                            cv2.circle(overlay, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
 
-                        if task.completing:
-                            colour = green
-                        else:
-                            colour = magenta
+                            # Draw task workers
+                            text = str(task.workers)
+                            font = cv2.FONT_HERSHEY_SIMPLEX
+                            font_scale = 1.5
+                            thickness = 4
+                            textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                            position = (int(x - textsize[0]/2), int(y + textsize[1]/2))
+                            cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                            cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+                            cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                            cv2.putText(overlay, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
-                        # Draw task boundary
-                        cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
-                        cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
-                        cv2.circle(overlay, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
-                        cv2.circle(overlay, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
+                        # Delete completed tasks
+                        for task_id in list(self.tasks.keys()):
+                            task = self.tasks[task_id]
+                            if task.completed:
+                                if task.team == Team.RED:
+                                    self.score_red = self.score_red + task.workers
+                                else: # task.team == Team.BLUE:
+                                    self.score_blue = self.score_blue + task.workers
 
-                        # Draw task workers
-                        text = str(task.workers)
-                        font = cv2.FONT_HERSHEY_SIMPLEX
-                        font_scale = 1.5
-                        thickness = 4
-                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                        position = (int(x - textsize[0]/2), int(y + textsize[1]/2))
-                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
-                        cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(overlay, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
-
-                    # Delete completed tasks
-                    for task_id in list(self.tasks.keys()):
-                        task = self.tasks[task_id]
-                        if task.completed:
-                            if task.team == Team.RED:
-                                self.score_red = self.score_red + task.workers
-                            else: # task.team == Team.BLUE:
-                                self.score_blue = self.score_blue + task.workers
-
-                            del self.tasks[task_id]
-                        elif task.failed:
-                            del self.tasks[task_id]
+                                del self.tasks[task_id]
+                            elif task.failed:
+                                del self.tasks[task_id]
 
                     # Draw the score
                     text = f"Score: {self.score_red}"
@@ -347,11 +354,15 @@ class Tracker():
 
             key = cv2.waitKey(1)
 
+            if key == ord('p'):
+                self.running = True                    
+
             if key == ord('r'):
                 self.score_red = 0
                 self.score_blue = 0
                 self.start_time = time.time()
                 self.tasks = {}
+                self.running = False
 
             if key == ord('q'):
                 sys.exit()
