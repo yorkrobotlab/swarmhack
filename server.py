@@ -88,6 +88,7 @@ class Tracker():
         self.task_counter = 0
         self.score_red = 0 # Even
         self.score_blue = 0 # Odd
+        self.start_time = time.time()
 
     def run(self):
         while True:        
@@ -318,6 +319,18 @@ class Tracker():
                     cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                     cv2.putText(overlay, text, position, font, font_scale, blue, thickness, cv2.LINE_AA)
 
+                    # Draw the timer
+                    time_remaining = int(180 + self.start_time - time.time())
+                    mins, secs = divmod(time_remaining, 60)
+                    timer = '{:02d}:{:02d}'.format(mins, secs)
+                    text = f"Timer: {timer}"
+                    textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                    position = (image.shape[1] - textsize[0] - 10, 60)
+                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+
                     # Transparency for overlaid augments
                     alpha = 0.3
                     image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
@@ -332,7 +345,15 @@ class Tracker():
 
             cv2.imshow(window_name, image)
 
-            if cv2.waitKey(1) == ord('q'):
+            key = cv2.waitKey(1)
+
+            if key == ord('r'):
+                self.score_red = 0
+                self.score_blue = 0
+                self.start_time = time.time()
+                self.tasks = {}
+
+            if key == ord('q'):
                 sys.exit()
 
 
