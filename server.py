@@ -3,10 +3,6 @@
 import sys
 import cv2
 import math
-import threading
-import asyncio
-import websockets
-import json
 from camera import *
 from vector2d import Vector2D
 import itertools
@@ -77,10 +73,9 @@ class Task:
         self.arrival_time = time.time()
         self.completing = False
 
-class Tracker(threading.Thread):
+class Tracker():
 
     def __init__(self):
-        threading.Thread.__init__(self)
         self.camera = Camera()
         self.calibrated = False
         self.num_corner_tags = 0
@@ -326,10 +321,8 @@ class Tracker(threading.Thread):
                         if task.completed:
                             self.score = self.score + task.workers
                             del self.tasks[task_id]
-                            print("completed", task_id)
                         elif task.failed:
                             del self.tasks[task_id]
-                            print("failed", task_id)
 
                     # Draw the score
                     text = f"Score: {self.score}"
@@ -347,7 +340,7 @@ class Tracker(threading.Thread):
                     alpha = 0.3
                     image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
 
-            window_name = 'SwarmHack'
+            window_name = 'Knightmare'
 
             # screen = screeninfo.get_monitors()[0]
             # width, height = screen.width, screen.height
@@ -357,63 +350,11 @@ class Tracker(threading.Thread):
 
             cv2.imshow(window_name, image)
 
-            # TODO: Fix quitting with Q (necessary for fullscreen mode)
             if cv2.waitKey(1) == ord('q'):
                 sys.exit()
 
-async def handler(websocket):
-    async for packet in websocket:
-        message = json.loads(packet)
-        
-        # Process any requests received
-        reply = {}
-        send_reply = False
 
-        if "check_awake" in message:
-            reply["awake"] = True
-            send_reply = True
-
-        if "get_robots" in message:
-
-            for id, robot in tracker.robots.items():
-                reply[id] = {}
-                reply[id]["orientation"] = robot.orientation
-                reply[id]["neighbours"] = {}
-                reply[id]["tasks"] = {}
-
-                for neighbour_id, neighbour in robot.neighbours.items():
-                    reply[id]["neighbours"][neighbour_id] = {}
-                    reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
-                    reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
-                    reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
-
-                for task_id, task in robot.tasks.items():
-                    reply[id]["tasks"][task_id] = {}
-                    reply[id]["tasks"][task_id]["range"] = task.range
-                    reply[id]["tasks"][task_id]["bearing"] = task.bearing
-                    reply[id]["tasks"][task_id]["workers"] = task.workers
-
-            send_reply = True
-
-        # Send reply, if requested
-        if send_reply:
-            await websocket.send(json.dumps(reply))
-
-
-# TODO: Handle Ctrl+C signals
 if __name__ == "__main__":
     global tracker
     tracker = Tracker()
-    tracker.start()
-
-    ##
-    # Use the following iptables rule to forward port 80 to 6000 for the server to use:
-    #   sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 6000
-    # Alternatively, change the port below to 80 and run this Python script as root.
-    ##
-    start_server = websockets.serve(ws_handler=handler, host=None, port=6000)
-    # start_server = websockets.serve(ws_handler=handler, host="144.32.165.233", port=6000)
-
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(start_server)
-    loop.run_forever()
+    tracker.run()
