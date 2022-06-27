@@ -28,48 +28,50 @@ MIN_INTER_TRANSMIT_TIME = 0.01
 async def helper(dev):
     global joyx, joyy, lasttransmit
 
-    async with websockets.connect(monaurl) as ws:
-        print("Connected to Mona at " + monaurl)
+    async for ws in websockets.connect(monaurl):
+        try:
+            print("Connected to Mona at " + monaurl)
 
-        async for ev in dev.async_read_loop():
-            if ev.type == ecodes.EV_ABS:
-                #print(repr(ev))
+            async for ev in dev.async_read_loop():
+                if ev.type == ecodes.EV_ABS:
+                    #print(repr(ev))
 
-                #If controlling using DPad...
-                if ev.code == 0 or ev.code == 1:
-                    leftw, rightw = 0, 0
-                    if ev.code == 1: #Forward backward on DPad
-                        if ev.value < -30000: #Forward
-                            leftw, rightw = 800, 800
-                        elif ev.value > 30000: #Backward
-                            leftw, rightw = -255, -255
-                    elif ev.code == 0: #Left right on DPad
-                        if ev.value < -30000: #Left
-                            leftw, rightw = -255, 255
-                        elif ev.value > 30000: #Right
-                            leftw, rightw = 255, -255
-                    #sendWheelSpeeds(leftw, rightw)
-                    if time.time() - lasttransmit > MIN_INTER_TRANSMIT_TIME:
-                        msg = '{"set_motor_speeds": {"left": "' + str(leftw) + '", "right": "' + str(rightw) + '"}}'
-                        print("Sending: " + msg)
-                        await ws.send(msg)
-                        lasttransmit = time.time()
+                    #If controlling using DPad...
+                    if ev.code == 0 or ev.code == 1:
+                        leftw, rightw = 0, 0
+                        if ev.code == 1: #Forward backward on DPad
+                            if ev.value < -30000: #Forward
+                                leftw, rightw = 800, 800
+                            elif ev.value > 30000: #Backward
+                                leftw, rightw = -255, -255
+                        elif ev.code == 0: #Left right on DPad
+                            if ev.value < -30000: #Left
+                                leftw, rightw = -255, 255
+                            elif ev.value > 30000: #Right
+                                leftw, rightw = 255, -255
+                        #sendWheelSpeeds(leftw, rightw)
+                        if time.time() - lasttransmit > MIN_INTER_TRANSMIT_TIME:
+                            msg = '{"set_motor_speeds": {"left": "' + str(leftw) + '", "right": "' + str(rightw) + '"}}'
+                            print("Sending: " + msg)
+                            await ws.send(msg)
+                            lasttransmit = time.time()
 
-                #If controlling using right stick...
-                if ev.code == 3 or ev.code == 4:
-                    if ev.code == 4: #Analogue fw -32768, bw 32768
-                        joyy = ev.value
-                    elif ev.code == 3: #Analogue left -32768, right 32768
-                        joyx = ev.value
+                    #If controlling using right stick...
+                    if ev.code == 3 or ev.code == 4:
+                        if ev.code == 4: #Analogue fw -32768, bw 32768
+                            joyy = ev.value
+                        elif ev.code == 3: #Analogue left -32768, right 32768
+                            joyx = ev.value
 
-                    leftw, rightw = getWheelsFromStick(joyx, joyy)
+                        leftw, rightw = getWheelsFromStick(joyx, joyy)
 
-                    if time.time() - lasttransmit > MIN_INTER_TRANSMIT_TIME:
-                        msg = '{"set_motor_speeds": {"left": "' + str(leftw) + '", "right": "' + str(rightw) + '"}}'
-                        print("Wheels to L:" + str(leftw) + " R:" + str(rightw))
-                        await ws.send(msg)
-                        lasttransmit = time.time()
-
+                        if time.time() - lasttransmit > MIN_INTER_TRANSMIT_TIME:
+                            msg = '{"set_motor_speeds": {"left": "' + str(leftw) + '", "right": "' + str(rightw) + '"}}'
+                            print("Wheels to L:" + str(leftw) + " R:" + str(rightw))
+                            await ws.send(msg)
+                            lasttransmit = time.time()
+        except websockets.ConnectionClosed:
+            continue
 
 
 async def sendWheelSpeeds(l, r):
