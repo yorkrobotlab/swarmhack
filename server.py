@@ -48,16 +48,6 @@ class Robot:
         self.id = tag.id
         self.position = position
         self.orientation = tag.angle
-        self.sensor_range = 0.3 # 30cm sensing radius
-        self.neighbours = {}
-        self.tasks = {}
-
-class SensorReading:
-    def __init__(self, range, bearing, orientation=0, workers=0):
-        self.range = range
-        self.bearing = bearing
-        self.orientation = orientation
-        self.workers = workers
 
 class Task:
     def __init__(self, id, workers, position, radius, time_limit):
@@ -156,20 +146,6 @@ class Tracker():
                     # Process robots
                     for id, robot in self.robots.items():
 
-                        for other_id, other_robot in self.robots.items():
-
-                            # Don't check this robot against itself, and ignore robots that aren't in our set
-                            if id != other_id and other_id in range(id - ((id-1) % 5), id + 5 - ((id-1) % 5)):
-
-                                robot_range = robot.position.distance_to(other_robot.position)
-
-                                if robot_range < robot.sensor_range:
-
-                                    absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
-                                    relative_bearing = absolute_bearing - robot.orientation
-                                    normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-                                    robot.neighbours[other_id] = SensorReading(robot_range, normalised_bearing, other_robot.orientation)
-
                         # Draw tag
                         tag = robot.tag
 
@@ -180,17 +156,7 @@ class Tracker():
                         cv2.line(image, (tag.bl.x, tag.bl.y), (tag.tl.x, tag.tl.y), green, 1, lineType=cv2.LINE_AA)
                         
                         # Draw circle on centre point
-                        cv2.circle(image, (tag.centre.x, tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
-
-                        # Draw robot's sensor range
-                        sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
-                        cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
-
-                        # Draw lines between robots if they are within sensor range
-                        for neighbour_id in robot.neighbours.keys():
-                            neighbour = self.robots[neighbour_id]
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 3, lineType=cv2.LINE_AA)
+                        cv2.circle(image, (tag.centre.x, tag.centre.y), 35, red, -1, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
@@ -214,12 +180,12 @@ class Tracker():
                         cv2.putText(overlay, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
                     # Create any new tasks, if necessary
-                    while len(self.tasks) < 3:
+                    while len(self.tasks) < 10:
                         id = self.task_counter
                         placed = False
                         while not placed:
                             overlaps = False
-                            workers = random.randint(1, 5)
+                            workers = random.randint(1, 2)
                             radius = math.sqrt(workers) * 0.1
                             min_x_metres = self.min_x / self.scale_factor
                             max_x_metres = self.max_x / self.scale_factor
@@ -250,18 +216,8 @@ class Tracker():
                         for robot_id, robot in self.robots.items():
                             distance = task.position.distance_to(robot.position)
 
-                            if distance < robot.sensor_range:
-
-                                absolute_bearing = math.degrees(math.atan2(task.position.y - robot.position.y, task.position.x - robot.position.x))
-                                relative_bearing = absolute_bearing - robot.orientation
-                                normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-
-                                robot.tasks[task_id] = SensorReading(distance, normalised_bearing, workers=task.workers)
-
                             if distance < task.radius:
                                 task.robots.append(robot_id)
-
-                        # print(f"Task {task_id} - workers: {task.workers}, robots: {task.robots}")
 
                         time_now = time.time()
                         
