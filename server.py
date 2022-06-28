@@ -197,7 +197,7 @@ class Tracker():
                     if self.running:
 
                         # Create any new tasks, if necessary
-                        if len(self.tasks) < 10:
+                        if len(self.tasks) < 5:
                             time_now = time.time()
                             if time_now - self.task_last_placed > random.randint(1, 10):
                                 id = self.task_counter
