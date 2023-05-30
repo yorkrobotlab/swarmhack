@@ -134,7 +134,7 @@ class Tracker(threading.Thread):
             lower = np.array(ball_boundary[0], dtype="uint8")
             upper = np.array(ball_boundary[1], dtype="uint8")
 
-            mask = cv2.inRange(image, ball_boundary[0], ball_boundary[1]) # Creates a colour mask of the camera around the "ball"
+            mask = cv2.inRange(image, lower, upper) # Creates a colour mask of the camera around the "ball"
             ball = Ball(mask)
             print(ball.position)
 
