@@ -48,7 +48,7 @@ class Tag:
         # Calculate orientation of tag
         self.forward = math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x) # Forward vector
         self.angle = math.degrees(self.forward) # Angle between forward vector and x-axis
-
+8
 class Robot:
     def __init__(self, tag, position):
         self.tag = tag
@@ -69,9 +69,12 @@ class Ball:
     def updatePosition(self, blob):
         sx = 0
         sy = 0
+        print(blob)
         white_count = 0
         for y in blob[0]:
+            print(blob[0])
             for x in blob[1]:
+                print(blob[1])
                 sx += x
                 sy += y
                 white_count += 1
