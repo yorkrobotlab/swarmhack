@@ -183,7 +183,7 @@ class Tracker(threading.Thread):
 
                     # Draw boundary of virtual environment based on corner tag positions
                     cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
-            
+                    cv2.circle(image, (ball.x, ball.y), 5, red, -1, lineType=cv2.LINE_AA)
                     # Process robots
                     for id, robot in self.robots.items():
 
