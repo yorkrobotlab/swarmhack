@@ -69,18 +69,10 @@ class Ball:
     def updatePosition(self, blob):
         sx = 0
         sy = 0
-        print(blob)
-        white_count = 0
-        for y in blob[0]:
-            print(blob[0])
-            for x in blob[1]:
-                print(blob[1])
-                sx += x
-                sy += y
-                white_count += 1
+        print(blob.max)
 
-        sx = sx / white_count
-        sy = sy / white_count
+        # sx = sx / white_count
+        # sy = sy / white_count
         self.position = (sx, sy)
 
 
