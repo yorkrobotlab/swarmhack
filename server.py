@@ -22,6 +22,8 @@ yellow = (50, 255, 255)
 black = (0, 0, 0)
 white = (255, 255, 255)
 
+ball_boundary = ([177, 16, 14], [188, 15, 12])
+
 class Tag:
     def __init__(self, id, raw_tag):
         self.id = id
@@ -55,6 +57,29 @@ class Robot:
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
         self.tasks = {}
+
+
+class Ball:
+    def __init__(self, blob):
+        self.tag = blob
+        self.id = blob.id
+        self.updatePosition(blob)
+
+    def updatePosition(self, blob):
+        sx = 0
+        sy = 0
+        white_count = 0
+        for y in blob[0]:
+            for x in blob[1]:
+                sx += x
+                sy += y
+                white_count += 1
+
+        sx = sx / white_count
+        sy = sy / white_count
+        self.position = (sx, sy)
+
+
 
 class SensorReading:
     def __init__(self, range, bearing, orientation=0, workers=0):
@@ -104,6 +129,9 @@ class Tracker(threading.Thread):
             aruco_parameters = cv2.aruco.DetectorParameters_create()
 
             (raw_tags, tag_ids, rejected) = cv2.aruco.detectMarkers(image, aruco_dictionary, parameters=aruco_parameters)
+            mask = cv2.inRange(image, ball_boundary[0], ball_boundary[1]) # Creates a colour mask of the camera around the "ball"
+            ball = Ball(mask)
+            print(ball.position)
 
             self.robots = {} # Clear dictionary every frame in case robots have disappeared
 
