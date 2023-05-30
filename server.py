@@ -63,7 +63,7 @@ class Robot:
 class Ball:
     def __init__(self, blob):
         self.tag = blob
-        self.id = blob.id
+        self.id = 180000
         self.updatePosition(blob)
 
     def updatePosition(self, blob):
