@@ -13,6 +13,7 @@ import itertools
 import random
 import angles
 import time
+import numpy as np
 
 red = (0, 0, 255)
 green = (0, 255, 0)
@@ -129,6 +130,10 @@ class Tracker(threading.Thread):
             aruco_parameters = cv2.aruco.DetectorParameters_create()
 
             (raw_tags, tag_ids, rejected) = cv2.aruco.detectMarkers(image, aruco_dictionary, parameters=aruco_parameters)
+
+            lower = np.array(ball_boundary[0], dtype="uint8")
+            upper = np.array(ball_boundary[1], dtype="uint8")
+
             mask = cv2.inRange(image, ball_boundary[0], ball_boundary[1]) # Creates a colour mask of the camera around the "ball"
             ball = Ball(mask)
             print(ball.position)
