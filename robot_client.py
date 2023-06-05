@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from robots import robots, server_none, server_york, server_manchester, server_sheffield
+from robots import robots, server_none, server_york
 
 import asyncio
 import websockets
@@ -24,9 +24,9 @@ colorama.init(autoreset=True)
 #  or specify a custom server IP address as a string.
 # All ports should remain at 80.
 ##
-server_address = server_none
-server_port = 80
-robot_port = 80
+server_address = server_york
+server_port = 6000
+robot_port = 6000
 ##
 
 if len(server_address) == 0:
@@ -448,7 +448,7 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = range(0, 0)
+    robot_ids = range(31, 32)
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "

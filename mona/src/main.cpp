@@ -34,7 +34,7 @@ std::map<String, colour> colours = {
 	{ "white", {10, 10, 10} }
 };
 
-AsyncWebServer server(80);
+AsyncWebServer server(6000);
 AsyncWebSocket ws("/");
 
 void sendState(bool allState);
