@@ -65,11 +65,16 @@ def kill_now() -> bool:
 
 # Ctrl+C termination handled
 ##
+class Ball():
+    def __init__(self, position):
+        self.position = position
+
 
 
 server_connection = None
 active_robots = {}
 ids = []
+ball = Ball([0, 0])
 
 
 # Robot states to use in the controller
@@ -208,12 +213,17 @@ async def message_robots(ids, function):
 async def get_server_data():
     try:
         global ids
-        message = {"get_robots": True}
+        global ball
+        message = {"get_robots": True, "get_ball": True}
 
         # Send request for data and wait for reply
         await server_connection.send(json.dumps(message))
         reply_json = await server_connection.recv()
         reply = json.loads(reply_json)
+
+        ball.position = reply["ball"]["position"]
+        print(ball.position)
+        del reply['ball']
 
         # Filter reply from the server, based on our active robots of interest
         filtered_reply = {int(k): v for (k, v) in reply.items() if int(k) in active_robots.keys()}
@@ -231,6 +241,7 @@ async def get_server_data():
             print(f"Neighbours = {active_robots[id].neighbours}")
             print(f"Tasks = {active_robots[id].tasks}")
             print()
+
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -306,31 +317,7 @@ async def send_commands(robot):
                 left = right = 0
         else:
             # Autonomous mode
-            if robot.state == RobotState.FORWARDS:
-                left = right = robot.MAX_SPEED
-                if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
-                    robot.turn_time = time.time()
-                    robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
-            elif robot.state == RobotState.BACKWARDS:
-                left = right = -robot.MAX_SPEED
-                robot.turn_time = time.time()
-                robot.state = RobotState.FORWARDS
-            elif robot.state == RobotState.LEFT:
-                left = -robot.MAX_SPEED
-                right = robot.MAX_SPEED
-                if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
-                    robot.turn_time = time.time()
-                    robot.state = RobotState.FORWARDS
-            elif robot.state == RobotState.RIGHT:
-                left = robot.MAX_SPEED
-                right = -robot.MAX_SPEED
-                if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
-                    robot.turn_time = time.time()
-                    robot.state = RobotState.FORWARDS
-            elif robot.state == RobotState.STOP:
-                left = right = 0
-                robot.turn_time = time.time()
-                robot.state = RobotState.FORWARDS
+            left = right = robot.MAX_SPEED
 
         message["set_motor_speeds"] = {}
         message["set_motor_speeds"]["left"] = left
@@ -448,11 +435,11 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = range(31, 32)
+    robot_ids = [40]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
-                        f"then re-run this script.")
+                        f"tleft = right = robot.MAX_SPEEDhen re-run this script.")
 
     # Create Robot objects
     for robot_id in robot_ids:

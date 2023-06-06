@@ -62,7 +62,10 @@ class Robot:
 
 
 class Ball:
-    pass
+    def __init__(self, position):
+        self.position = position
+
+
 
 class Goal:
     def __init__(self, position, width, height):
@@ -113,6 +116,7 @@ class Tracker(threading.Thread):
         self.tasks = {}
         self.task_counter = 0
         self.score = 0
+        self.ball = Ball((0, 0))
 
     """
     processes raw tags and updates self.robots to contain a dictionary of all visible robots and their IDs
@@ -127,11 +131,22 @@ class Tracker(threading.Thread):
             tag = Tag(id, raw_tag)
 
             if self.calibrated:
+                if (tag.id == 6):
+                    position = Vector2D(tag.centre.x / self.scale_factor,
+                                        tag.centre.y / self.scale_factor)
+                    self.ball.position = position
+                    self.ball.tag = tag
+
                 if (tag.id not in [0, 6]):  # Reserved tag ID for corners and for ball
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)  # Convert pixel coordinates to metres
                     self.robots[id] = Robot(tag, position)
             else:  # Only calibrate the first time two corner tags are detected
+                if tag.id == 6:
+                    position = Vector2D(tag.centre.x / self.scale_factor,
+                                        tag.centre.y / self.scale_factor)
+                    self.ball.position = position
+                    self.ball.tag = tag
 
                 if tag.id == 0:  # Reserved tag ID for corners
 
@@ -160,6 +175,7 @@ class Tracker(threading.Thread):
                         self.calibrated = True
 
                     self.num_corner_tags = self.num_corner_tags + 1
+
     """
     Backend processing for the robots.
     
@@ -330,6 +346,18 @@ class Tracker(threading.Thread):
                 cv2.putText(image, text, position, font, font_scale, blue, thickness * 3, cv2.LINE_AA)
             cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
+    def drawBall(self, image):
+        cv2.circle(image, (self.ball.tag.centre.x, self.ball.tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
+
+        text = "Puck"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1.5
+        thickness = 4
+        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+        position = (int(self.ball.tag.centre.x - textsize[0] / 2), int(self.ball.tag.centre.y + textsize[1] / 2))
+        cv2.putText(image, text, position, font, font_scale, green, thickness * 3, cv2.LINE_AA)
+
+
 
     def run(self):
         while True:        
@@ -359,7 +387,7 @@ class Tracker(threading.Thread):
                 self.processRobots()
                 self.drawRobots(image)
 
-                # processTasks
+                self.drawBall(image)
                 # self.processTasks(image, overlay)
 
                 text = f"Score: {self.score}"
@@ -420,6 +448,10 @@ async def handler(websocket):
                     reply[id]["tasks"][task_id]["range"] = task.range
                     reply[id]["tasks"][task_id]["bearing"] = task.bearing
                     reply[id]["tasks"][task_id]["workers"] = task.workers
+
+        if "get_ball" in message:
+            reply['ball'] = {}
+            reply['ball']['position'] = [tracker.ball.position.x, tracker.ball.position.y]
 
             send_reply = True
 
