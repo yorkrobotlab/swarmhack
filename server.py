@@ -13,11 +13,13 @@ import itertools
 import random
 import angles
 import time
+from enum import Enum
 import numpy as np
 
 red = (0, 0, 255)
 green = (0, 255, 0)
 blue = (255, 0, 0)
+purple = (128, 0, 128)
 magenta = (255, 0, 255)
 cyan = (255, 255, 0)
 yellow = (50, 255, 255)
@@ -66,14 +68,45 @@ class Ball:
         self.position = position
 
 
+class Zone:
+    """
+    Creates a zone from x value and width of the zone
+
+    De Jure robots  -- Robots that rightfully belong to the zone
+    De Facto robots -- Robots that are currently inside the zone
+
+    """
+    def __init__(self, x, width):
+        self.de_jure_robots = []
+        self.de_facto_robots = []
+
+        self.x1 = x
+        self.x2 = x + width
+
+    def addDeJure(self, robot):
+        self.de_jure_robots.append(robot)
+
+    def setDefacto(self, robots):
+        self.de_facto_robots = robots
+
+    def getZone(self):
+        return (self.x1, self.x2)
+
+    def checkRobots(self):
+        for robot in self.de_jure_robots:
+            if robot not in self.de_facto_robots:
+                return False
+        return True
+
+
 
 class Goal:
-    def __init__(self, position, width, height):
-        self.minX = position[0]
-        self.minY = position[1]
+    def __init__(self, x, y, width, height):
+        self.x1 = x
+        self.y1 = y
 
-        self.maxX = position[0] + width
-        self.maxY = position[1] + height
+        self.x2 = x + width
+        self.y2 = y + height
 
 
 
@@ -85,6 +118,50 @@ class SensorReading:
         self.orientation = orientation
         self.workers = workers
 
+class TimerStatus(Enum):
+    STOPPED = 0
+    STARTED = 1
+    PAUSED = 2
+    COMPLETE = 3
+class Timer:
+    def __init__(self, time_limit):
+        self.time_limit = time_limit
+        self.status = TimerStatus.STOPPED
+        self.elapsed_time = 0
+        self.start_time = 0
+    def start(self):
+        self.start_time = time.time()
+        self.elapsed_time = 0
+        self.status = TimerStatus.STARTED
+
+    def pause(self):
+        self.elapsed_time = self.start_time - time.time()
+        self.time_limit = self.time_limit - self.elapsed_time()
+        self.status = TimerStatus.PAUSED
+
+    def unpause(self):
+        self.status = TimerStatus.STARTED
+
+    def update(self):
+        if self.status == TimerStatus.STARTED:
+            self.elapsed_time = time.time() - self.start_time
+            if self.elapsed_time >= self.time_limit:
+                self.status == TimerStatus.COMPLETE
+
+
+    def getString(self):
+        time_left = self.time_limit - self.elapsed_time
+
+        time_string = ""
+        seconds = int(time_left) % 60
+        minutes = int(time_left) // 60
+
+        seconds = str(seconds)
+
+        if len(seconds) == 1:
+            seconds = "0" + seconds
+        time_string = str(minutes) + ":" + seconds
+        return time_string
 class Task:
     def __init__(self, id, workers, position, radius, time_limit):
         self.id = id
@@ -117,6 +194,8 @@ class Tracker(threading.Thread):
         self.task_counter = 0
         self.score = 0
         self.ball = Ball((0, 0))
+        self.zones = []
+
 
     """
     processes raw tags and updates self.robots to contain a dictionary of all visible robots and their IDs
@@ -142,45 +221,106 @@ class Tracker(threading.Thread):
                                         tag.centre.y / self.scale_factor)  # Convert pixel coordinates to metres
                     self.robots[id] = Robot(tag, position)
             else:  # Only calibrate the first time two corner tags are detected
-                if tag.id == 6:
-                    position = Vector2D(tag.centre.x / self.scale_factor,
-                                        tag.centre.y / self.scale_factor)
-                    self.ball.position = position
-                    self.ball.tag = tag
-
-                if tag.id == 0:  # Reserved tag ID for corners
-
-                    if self.num_corner_tags == 0:  # Record the first corner tag detected
-                        self.min_x = tag.centre.x
-                        self.max_x = tag.centre.x
-                        self.min_y = tag.centre.y
-                        self.max_y = tag.centre.y
-                    else:  # Set min/max boundaries of arena based on second corner tag detected
-
-                        if tag.centre.x < self.min_x:
-                            self.min_x = tag.centre.x
-                        if tag.centre.x > self.max_x:
-                            self.max_x = tag.centre.x
-                        if tag.centre.y < self.min_y:
-                            self.min_y = tag.centre.y
-                        if tag.centre.y > self.max_y:
-                            self.max_y = tag.centre.y
-
-                        self.corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x,
-                                                                                           self.max_y])  # Euclidean distance between corner tags in pixels
-                        self.scale_factor = self.corner_distance_pixels / self.corner_distance_metres
-                        x = ((self.max_x - self.min_x) / 2) / self.scale_factor  # Convert to metres
-                        y = ((self.max_y - self.min_y) / 2) / self.scale_factor  # Convert to metres
-                        self.centre = Vector2D(x, y)
-                        self.calibrated = True
-
-                    self.num_corner_tags = self.num_corner_tags + 1
-
+                self.calibrate(tag)
     """
-    Backend processing for the robots.
+    Defines an amount of uniformly sized, uniformly spaced Zones equal to the zone_amount
     
-    Currently: Builds a map of neighbouring robots.
+    zone_amount -- amount of zones to be defined
+    offset      -- how far the zones overlap (Default : 150)
+    
     """
+    def defineZones(self, zone_amount, offset=150):
+        max_width = self.max_x - self.min_x
+        zone_width = max_width / zone_amount
+
+
+        x = self.min_x + offset/2
+        for zone in range(zone_amount):
+            z = Zone(x-offset, zone_width+offset)
+            if (z.x1 < self.min_x):
+                z.x1 = self.min_x
+            elif (z.x2 > self.max_x):
+                z.x2 = self.max_x
+            self.zones.append(z)
+            x += zone_width
+
+    """
+    Draws the Zones on to the image-display
+    
+    image -- camera image for the zones to be drawn on top of.
+    """
+    def drawZones(self, image):
+        colors = [red, purple, blue]
+        for zone_index in range(len(self.zones)):
+            zone = self.zones[zone_index]
+            cv2.rectangle(image, (int(zone.x1), self.min_y), (int(zone.x2), self.max_y), colors[zone_index % len(colors)], 1, lineType=cv2.LINE_AA)
+
+    def defineGoals(self, goal_width, goal_height):
+        x = self.min_x
+        y = ((self.max_y - self.min_y) - goal_height) / 2 + self.min_y
+        self.red_goal = Goal(int(x), int(y), goal_width, goal_height)
+
+        x = self.max_x - goal_width
+        self.blue_goal = Goal(int(x), int(y), goal_width, goal_height)
+
+    def drawGoals(self, image):
+        cv2.rectangle(image, (self.red_goal.x1, self.red_goal.y1), (self.red_goal.x2, self.red_goal.y2), red,
+                      1, lineType=cv2.LINE_AA)
+        cv2.rectangle(image, (self.blue_goal.x1, self.blue_goal.y1), (self.blue_goal.x2, self.blue_goal.y2), blue,
+                      1, lineType=cv2.LINE_AA)
+
+
+    """
+    Calibrates the play area ready for a match
+    
+    tag -- a tag of ID=0
+    """
+    def calibrate(self, tag):
+        if tag.id == 6:
+            position = Vector2D(0, 0)
+            self.ball.position = position
+            self.ball.tag = tag
+
+        if tag.id == 0:  # Reserved tag ID for corners
+
+            if self.num_corner_tags == 0:  # Record the first corner tag detected
+                self.min_x = tag.centre.x
+                self.max_x = tag.centre.x
+                self.min_y = tag.centre.y
+                self.max_y = tag.centre.y
+            else:  # Set min/max boundaries of arena based on second corner tag detected
+
+                if tag.centre.x < self.min_x:
+                    self.min_x = tag.centre.x
+                if tag.centre.x > self.max_x:
+                    self.max_x = tag.centre.x
+                if tag.centre.y < self.min_y:
+                    self.min_y = tag.centre.y
+                if tag.centre.y > self.max_y:
+                    self.max_y = tag.centre.y
+
+                self.corner_distance_pixels = math.dist([self.min_x, self.min_y], [self.max_x,
+                                                                                   self.max_y])  # Euclidean distance between corner tags in pixels
+                self.scale_factor = self.corner_distance_pixels / self.corner_distance_metres
+                x = ((self.max_x - self.min_x) / 2) / self.scale_factor  # Convert to metres
+                y = ((self.max_y - self.min_y) / 2) / self.scale_factor  # Convert to metres
+                self.centre = Vector2D(x, y)
+
+                self.defineZones(3)
+                self.defineGoals(125, 250)
+                self.timer = Timer(5)
+                self.timer.start()
+
+                self.calibrated = True
+
+            self.num_corner_tags = self.num_corner_tags + 1
+
+    """
+        Backend processing for the robots.
+
+        Currently: Builds a map of neighbouring robots.
+    """
+
     def processRobots(self):
         for id, robot in self.robots.items():
 
@@ -388,9 +528,11 @@ class Tracker(threading.Thread):
                 self.drawRobots(image)
 
                 self.drawBall(image)
+                self.drawZones(image)
+                self.drawGoals(image)
                 # self.processTasks(image, overlay)
-
-                text = f"Score: {self.score}"
+                self.timer.update()
+                text = f"Time: {self.timer.getString()}"
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = 2
                 thickness = 5
