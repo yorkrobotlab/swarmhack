@@ -25,6 +25,7 @@ cyan = (255, 255, 0)
 yellow = (50, 255, 255)
 black = (0, 0, 0)
 white = (255, 255, 255)
+grey = (100, 100, 100)
 
 ball_boundary = ([177, 16, 14], [188, 15, 12])
 
@@ -145,16 +146,28 @@ class Timer:
     def update(self):
         if self.status == TimerStatus.STARTED:
             self.elapsed_time = time.time() - self.start_time
+            self.time_left = self.time_limit - self.elapsed_time
             if self.elapsed_time >= self.time_limit:
                 self.status = TimerStatus.COMPLETE
+                self.time_left = 0
 
+    def getColor(self):
+        if self.status == TimerStatus.STARTED:
+            if self.time_left <= 5:
+                return yellow
+            else:
+                return green
+        elif self.status == TimerStatus.PAUSED:
+            return grey
+        elif self.status == TimerStatus.COMPLETE:
+            return red
 
     def getString(self):
-        time_left = self.time_limit - self.elapsed_time
+
 
         time_string = ""
-        seconds = int(time_left) % 60
-        minutes = int(time_left) // 60
+        seconds = int(self.time_left) % 60
+        minutes = int(self.time_left) // 60
 
         seconds = str(seconds)
 
@@ -539,7 +552,7 @@ class Tracker(threading.Thread):
                 textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                 position = (10, 60)
                 cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                cv2.putText(image, text, position, font, font_scale, self.timer.getColor(), thickness, cv2.LINE_AA)
 
                 # Transparency for overlaid augments
                 alpha = 0.3
