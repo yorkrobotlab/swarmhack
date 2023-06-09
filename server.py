@@ -67,6 +67,7 @@ class Robot:
 class Ball:
     def __init__(self, position):
         self.position = position
+        self.radius = 5
 
 
 class Zone:
@@ -109,6 +110,18 @@ class Goal:
         self.x2 = x + width
         self.y2 = y + height
 
+    def check(self, ball):
+        ball_x = ball.position[0]
+        ball_y = ball.position[1]
+
+        if (ball_x - ball.radius) > self.x1 and \
+                (ball_x + ball.radius) < self.x2 and \
+                (ball_y + ball.radius) < self.y2 and \
+                (ball_y - ball.radius) > self.y1:
+            return True
+        return False
+
+
 
 
 
@@ -137,7 +150,7 @@ class Timer:
 
     def pause(self):
         self.elapsed_time = self.start_time - time.time()
-        self.time_limit = self.time_limit - self.elapsed_time()
+        self.time_limit = self.time_limit - self.elapsed_time
         self.status = TimerStatus.PAUSED
 
     def unpause(self):
@@ -153,17 +166,16 @@ class Timer:
 
     def getColor(self):
         if self.status == TimerStatus.STARTED:
-            if self.time_left <= 5:
+            if self.time_left <= 31:
                 return yellow
             else:
-                return green
+                return white
         elif self.status == TimerStatus.PAUSED:
             return grey
         elif self.status == TimerStatus.COMPLETE:
             return red
 
     def getString(self):
-
 
         time_string = ""
         seconds = int(self.time_left) % 60
@@ -205,7 +217,8 @@ class Tracker(threading.Thread):
         self.robots = {}
         self.tasks = {}
         self.task_counter = 0
-        self.score = 0
+        self.red_score = 0
+        self.blue_score = 0
         self.ball = Ball((0, 0))
         self.zones = []
 
@@ -545,7 +558,16 @@ class Tracker(threading.Thread):
                 self.drawGoals(image)
                 # self.processTasks(image, overlay)
                 self.timer.update()
+                if (self.timer.status != TimerStatus.PAUSED):
+                    if self.blue_goal.check(self.ball):
+                        self.blue_score += 1
+                        self.timer.pause()
+                    elif self.red_goal.check(self.ball):
+                        self.red_score += 1
+                        self.timer.pause()
+
                 text = f"Time: {self.timer.getString()}"
+                score_text = f"B: {self.blue_score} R: {self.red_score}"
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = 2
                 thickness = 5
@@ -553,6 +575,8 @@ class Tracker(threading.Thread):
                 position = (10, 60)
                 cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                 cv2.putText(image, text, position, font, font_scale, self.timer.getColor(), thickness, cv2.LINE_AA)
+
+                cv2.putText(image, score_text, (20, 60), font, font_scale, black, thickness, cv2.LINE_AA)
 
                 # Transparency for overlaid augments
                 alpha = 0.3
