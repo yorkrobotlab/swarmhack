@@ -146,7 +146,7 @@ class Timer:
         if self.status == TimerStatus.STARTED:
             self.elapsed_time = time.time() - self.start_time
             if self.elapsed_time >= self.time_limit:
-                self.status == TimerStatus.COMPLETE
+                self.status = TimerStatus.COMPLETE
 
 
     def getString(self):
