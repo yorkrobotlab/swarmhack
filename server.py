@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-import cv2
+from pynput import keyboard
 import math
 import threading
 import asyncio
@@ -29,6 +29,10 @@ grey = (100, 100, 100)
 
 ball_boundary = ([177, 16, 14], [188, 15, 12])
 
+
+
+
+
 class Tag:
     def __init__(self, id, raw_tag):
         self.id = id
@@ -52,7 +56,16 @@ class Tag:
         # Calculate orientation of tag
         self.forward = math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x) # Forward vector
         self.angle = math.degrees(self.forward) # Angle between forward vector and x-axis
-8
+class StartingPosition:
+    def __init__(self, x, y, x_min, x_max, y_min, y_max):
+        self.x = x_min + x
+        self.y = y_min + y
+
+        self.x2 = x_max - x
+        self.y2 = y_max - y
+
+
+
 class Robot:
     def __init__(self, tag, position):
         self.tag = tag
@@ -67,7 +80,7 @@ class Robot:
 class Ball:
     def __init__(self, position):
         self.position = position
-        self.radius = 5
+        self.radius = 30
 
 
 class Zone:
@@ -78,15 +91,28 @@ class Zone:
     De Facto robots -- Robots that are currently inside the zone
 
     """
-    def __init__(self, x, width):
+    def __init__(self, x, y, width, height):
         self.de_jure_robots = []
         self.de_facto_robots = []
 
         self.x1 = x
         self.x2 = x + width
 
+        self.y1 = y
+        self.y2 = y + height
+
     def addDeJure(self, robot):
         self.de_jure_robots.append(robot)
+
+    def contains(self, ball):
+        ball_x = ball.tag.centre.x
+        ball_y = ball.tag.centre.y
+        if (ball_x - ball.radius) > self.x1 and \
+                (ball_x + ball.radius) < self.x2 and \
+                (ball_y + ball.radius) < self.y2 and \
+                (ball_y - ball.radius) > self.y1:
+            return True
+        return False
 
     def setDefacto(self, robots):
         self.de_facto_robots = robots
@@ -101,7 +127,6 @@ class Zone:
         return True
 
 
-
 class Goal:
     def __init__(self, x, y, width, height):
         self.x1 = x
@@ -110,19 +135,21 @@ class Goal:
         self.x2 = x + width
         self.y2 = y + height
 
+        self.score = 0
+
     def check(self, ball):
-        ball_x = ball.position[0]
-        ball_y = ball.position[1]
+        ball_x = ball.tag.centre.x
+        ball_y = ball.tag.centre.y
+
+        # print(f"ball_x: {ball_x}, \n ball_y: {ball_y}, \n (x1, x2): {self.x1, self.x2}, \n (y1, y2): {self.y1, self.y2}")
 
         if (ball_x - ball.radius) > self.x1 and \
                 (ball_x + ball.radius) < self.x2 and \
                 (ball_y + ball.radius) < self.y2 and \
                 (ball_y - ball.radius) > self.y1:
+            self.score += 1
             return True
         return False
-
-
-
 
 
 class SensorReading:
@@ -132,11 +159,14 @@ class SensorReading:
         self.orientation = orientation
         self.workers = workers
 
+
 class TimerStatus(Enum):
     STOPPED = 0
     STARTED = 1
     PAUSED = 2
     COMPLETE = 3
+
+
 class Timer:
     def __init__(self, time_limit):
         self.time_limit = time_limit
@@ -149,18 +179,19 @@ class Timer:
         self.status = TimerStatus.STARTED
 
     def pause(self):
-        self.elapsed_time = self.start_time - time.time()
-        self.time_limit = self.time_limit - self.elapsed_time
+        self.elapsed_time = time.time() - self.start_time
         self.status = TimerStatus.PAUSED
 
     def unpause(self):
         self.status = TimerStatus.STARTED
+        self.time_limit = self.time_limit - self.elapsed_time
+        self.start_time = time.time()
 
     def update(self):
         if self.status == TimerStatus.STARTED:
             self.elapsed_time = time.time() - self.start_time
             self.time_left = self.time_limit - self.elapsed_time
-            if self.elapsed_time >= self.time_limit:
+            if self.time_left <= 0:
                 self.status = TimerStatus.COMPLETE
                 self.time_left = 0
 
@@ -201,7 +232,9 @@ class Task:
 
 class Tracker(threading.Thread):
 
+
     def __init__(self):
+
         threading.Thread.__init__(self)
         self.camera = Camera()
         self.calibrated = False
@@ -221,8 +254,24 @@ class Tracker(threading.Thread):
         self.blue_score = 0
         self.ball = Ball((0, 0))
         self.zones = []
+        self.gameState = 0
 
 
+
+        listener = keyboard.Listener(
+            on_press=self.on_press)
+        listener.start()
+
+    def on_press(self, key):
+        try:
+            if key.char == 'p':
+                if self.timer.status == TimerStatus.PAUSED:
+                    self.timer.unpause()
+                else:
+                    self.timer.pause()
+        except AttributeError:
+            print('special key {0} pressed'.format(
+                key))
     """
     processes raw tags and updates self.robots to contain a dictionary of all visible robots and their IDs
     
@@ -262,7 +311,7 @@ class Tracker(threading.Thread):
 
         x = self.min_x + offset/2
         for zone in range(zone_amount):
-            z = Zone(x-offset, zone_width+offset)
+            z = Zone(x-offset, self.min_y, zone_width+offset, self.max_y - self.min_y)
             if (z.x1 < self.min_x):
                 z.x1 = self.min_x
             elif (z.x2 > self.max_x):
@@ -279,7 +328,7 @@ class Tracker(threading.Thread):
         colors = [red, purple, blue]
         for zone_index in range(len(self.zones)):
             zone = self.zones[zone_index]
-            cv2.rectangle(image, (int(zone.x1), self.min_y), (int(zone.x2), self.max_y), colors[zone_index % len(colors)], 1, lineType=cv2.LINE_AA)
+            cv2.rectangle(image, (int(zone.x1), zone.y1), (int(zone.x2), zone.y2), colors[zone_index % len(colors)], 1, lineType=cv2.LINE_AA)
 
     def defineGoals(self, goal_width, goal_height):
         x = self.min_x
@@ -333,8 +382,8 @@ class Tracker(threading.Thread):
                 self.centre = Vector2D(x, y)
 
                 self.defineZones(3)
-                self.defineGoals(125, 250)
-                self.timer = Timer(5)
+                self.defineGoals(250, 500)
+                self.timer = Timer(180)
                 self.timer.start()
 
                 self.calibrated = True
@@ -523,7 +572,46 @@ class Tracker(threading.Thread):
         position = (int(self.ball.tag.centre.x - textsize[0] / 2), int(self.ball.tag.centre.y + textsize[1] / 2))
         cv2.putText(image, text, position, font, font_scale, green, thickness * 3, cv2.LINE_AA)
 
+    def processGame(self, image):
+        if self.timer.status != TimerStatus.PAUSED and self.timer.status != TimerStatus.COMPLETE:
+            if self.blue_goal.check(self.ball) or self.red_goal.check(self.ball):
+                self.timer.pause()
+                self.gameState = 1
+                self.reset_zone = Zone((self.max_x - self.min_x) / 2, (self.max_y - self.min_y) / 2, 150, 150)
+        if self.timer.status == TimerStatus.PAUSED and self.gameState == 1:
+            cv2.rectangle(image, (int(self.reset_zone.x1), int(self.reset_zone.y1)),
+                          (int(self.reset_zone.x2), int(self.reset_zone.y2)),
+                          green, 1, lineType=cv2.LINE_AA)
+            if self.reset_zone.contains(self.ball):
+                self.timer.unpause()
+                self.gameState = 0
+        elif self.timer.status == TimerStatus.COMPLETE:
+            if self.blue_goal.score > self.red_goal.score:
+                # red wins
+                text = "RED WINS"
+                tcolor = red
+            elif self.red_goal.score > self.blue_goal.score:
+                # blue wins
+                text = "BLUE WINS"
+                tcolor = blue
+            else:
+                text = "DRAW"
+                tcolor = yellow
 
+            offset = 0
+            for i in text:
+                if i == "I":
+                    offset += 21
+                else:
+                    offset += 63
+
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 2
+            thickness = 5
+            textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+            position = (960 - offset, 540)
+            cv2.putText(image, text, position, font, font_scale * 3, black, thickness * 3, cv2.LINE_AA)
+            cv2.putText(image, text, position, font, font_scale * 3, tcolor, thickness, cv2.LINE_AA)
 
     def run(self):
         while True:        
@@ -558,25 +646,22 @@ class Tracker(threading.Thread):
                 self.drawGoals(image)
                 # self.processTasks(image, overlay)
                 self.timer.update()
-                if (self.timer.status != TimerStatus.PAUSED):
-                    if self.blue_goal.check(self.ball):
-                        self.blue_score += 1
-                        self.timer.pause()
-                    elif self.red_goal.check(self.ball):
-                        self.red_score += 1
-                        self.timer.pause()
+
+                self.processGame(image)
 
                 text = f"Time: {self.timer.getString()}"
-                score_text = f"B: {self.blue_score} R: {self.red_score}"
+                red_sc = str(self.blue_goal.score) # THIS IS CORRECT
+                blu_sc = str(self.red_goal.score)
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = 2
                 thickness = 5
                 textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                position = (10, 60)
+                position = (790, 60)
                 cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                 cv2.putText(image, text, position, font, font_scale, self.timer.getColor(), thickness, cv2.LINE_AA)
 
-                cv2.putText(image, score_text, (20, 60), font, font_scale, black, thickness, cv2.LINE_AA)
+                cv2.putText(image, blu_sc, (self.blue_goal.x2, 1000), font, font_scale * 2, blue, thickness * 3, cv2.LINE_AA)
+                cv2.putText(image, red_sc, (self.red_goal.x1 - 80, 1000), font, font_scale * 2, red, thickness * 3, cv2.LINE_AA)
 
                 # Transparency for overlaid augments
                 alpha = 0.3
@@ -593,8 +678,10 @@ class Tracker(threading.Thread):
             cv2.imshow(window_name, image)
 
             # TODO: Fix quitting with Q (necessary for fullscreen mode)
+
+
             if cv2.waitKey(1) == ord('q'):
-                sys.exit()
+                sys.exit(1)
 
 async def handler(websocket):
     async for packet in websocket:
