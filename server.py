@@ -75,6 +75,7 @@ class Robot:
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
         self.tasks = {}
+        self.out_of_bounds = False
 
 
 class Ball:
@@ -93,7 +94,7 @@ class Zone:
     """
     def __init__(self, x, y, width, height):
         self.de_jure_robots = []
-        self.de_facto_robots = []
+        self.rule_breakers = []
 
         self.x1 = x
         self.x2 = x + width
@@ -114,17 +115,25 @@ class Zone:
             return True
         return False
 
-    def setDefacto(self, robots):
-        self.de_facto_robots = robots
+    def buildDeJure(self, robots):
+        for id, robot in robots.items():
+            if self.x1 <= robot.tag.centre.x <= self.x2:
+                self.de_jure_robots.append(id)
 
     def getZone(self):
         return (self.x1, self.x2)
 
-    def checkRobots(self):
-        for robot in self.de_jure_robots:
-            if robot not in self.de_facto_robots:
-                return False
-        return True
+    def checkRobots(self, robots):
+        self.rule_breakers = []
+
+        for id, robot in robots.items():
+            if id in self.de_jure_robots:
+
+                if self.x1 > robot.tag.centre.x > self.x2:
+                    self.rule_breakers.append(id)
+
+        return robots
+
 
 
 class Goal:
@@ -269,6 +278,11 @@ class Tracker(threading.Thread):
                     self.timer.unpause()
                 else:
                     self.timer.pause()
+            if key.char == 'l':
+
+                for zone in self.zones:
+                    print(zone.rule_breakers, zone.x1, zone.x2)
+                    print(zone.de_jure_robots)
         except AttributeError:
             print('special key {0} pressed'.format(
                 key))
@@ -388,6 +402,7 @@ class Tracker(threading.Thread):
 
                 self.calibrated = True
 
+
             self.num_corner_tags = self.num_corner_tags + 1
 
     """
@@ -405,12 +420,11 @@ class Tracker(threading.Thread):
 
                     range = robot.position.distance_to(other_robot.position)
 
-                    if range < robot.sensor_range:
-                        absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y,
-                                                                   other_robot.position.x - robot.position.x))
-                        relative_bearing = absolute_bearing - robot.orientation
-                        normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-                        robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
+                    absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y,
+                                                               other_robot.position.x - robot.position.x))
+                    relative_bearing = absolute_bearing - robot.orientation
+                    normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
 
     """
     Code for processing old task-based game
@@ -549,17 +563,27 @@ class Tracker(threading.Thread):
                      lineType=cv2.LINE_AA)
 
             # Draw tag ID
+
+            for zone in self.zones:
+                if id in zone.rule_breakers:
+                    text2 = "X"
+                    break
+            else:
+                text2 = ""
             text = str(tag.id)
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 1.5
             thickness = 4
             textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-            position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2))
+            position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2 - 3))
+            cv2.putText(image, text2, position, font, font_scale * 3, red, thickness * 4, cv2.LINE_AA)
             if tag.id % 2 == 0:
                 cv2.putText(image, text, position, font, font_scale, red, thickness * 3, cv2.LINE_AA)
             else:
                 cv2.putText(image, text, position, font, font_scale, blue, thickness * 3, cv2.LINE_AA)
             cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+
+
 
     def drawBall(self, image):
         cv2.circle(image, (self.ball.tag.centre.x, self.ball.tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
@@ -573,6 +597,17 @@ class Tracker(threading.Thread):
         cv2.putText(image, text, position, font, font_scale, green, thickness * 3, cv2.LINE_AA)
 
     def processGame(self, image):
+        newzones = []
+        for zone in self.zones:
+            zone.checkRobots(self.robots)
+            newzones.append(zone)
+        self.zones = newzones
+        if len(self.zones[0].de_jure_robots) == 0:
+            newzones = []
+            for zone in self.zones:
+                zone.buildDeJure(self.robots)
+                newzones.append(zone)
+            self.zones = newzones
         if self.timer.status != TimerStatus.PAUSED and self.timer.status != TimerStatus.COMPLETE:
             if self.blue_goal.check(self.ball) or self.red_goal.check(self.ball):
                 self.timer.pause()
@@ -702,6 +737,7 @@ async def handler(websocket):
                 reply[id]["orientation"] = robot.orientation
                 reply[id]["neighbours"] = {}
                 reply[id]["tasks"] = {}
+                reply[id]["remaining_time"] = int(tracker.timer.time_left)
 
                 for neighbour_id, neighbour in robot.neighbours.items():
                     reply[id]["neighbours"][neighbour_id] = {}
