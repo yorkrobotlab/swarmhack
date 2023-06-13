@@ -12,6 +12,9 @@ from enum import Enum
 import time
 import random
 import inspect
+from vector2d import Vector2D
+import math
+import angles
 
 import colorama
 from colorama import Fore
@@ -84,6 +87,7 @@ class RobotState(Enum):
     LEFT = 3
     RIGHT = 4
     STOP = 5
+    REGROUP = 6
 
 
 # Main Robot class to keep track of robot states
@@ -105,7 +109,6 @@ class Robot:
         self.neighbours = {}
         self.tasks = {}
 
-        self.teleop = False
         self.state = RobotState.STOP
         self.ir_readings = []
         self.battery_charging = False
@@ -113,14 +116,12 @@ class Robot:
         self.battery_percentage = 0
 
         self.turn_time = time.time()
+        self.regroup_time = time.time()
 
         # Pi-puck IR is more sensitive than Mona, so use higher threshold for obstacle detection
-        if robot_id < 31:
-            # Pi-puck
-            self.ir_threshold = 200
-        else:
-            # Mona
-            self.ir_threshold = 80
+
+        # Mona
+        self.ir_threshold = 80
 
 
 # Connect to websocket server of tracking server
@@ -287,7 +288,7 @@ async def get_data(robot):
 
 
 # Send motor and LED commands to robot
-# This function also performs the obstacle avoidance and teleop algorithm state machines
+# This function also performs the obstacle avoidance state machine
 async def send_commands(robot):
     try:
         # Turn off LEDs and motors when killed
@@ -300,127 +301,79 @@ async def send_commands(robot):
         # Construct command message
         message = {}
 
-        if robot.teleop:
-            # Teleoperation mode
-            message["set_leds_colour"] = "blue"
-            if robot.state == RobotState.FORWARDS:
-                left = right = robot.MAX_SPEED
-            elif robot.state == RobotState.BACKWARDS:
-                left = right = -robot.MAX_SPEED
-            elif robot.state == RobotState.LEFT:
-                left = -robot.MAX_SPEED * 0.8
-                right = robot.MAX_SPEED * 0.8
-            elif robot.state == RobotState.RIGHT:
-                left = robot.MAX_SPEED * 0.8
-                right = -robot.MAX_SPEED * 0.8
-            elif robot.state == RobotState.STOP:
-                left = right = 0
-        else:
-            # Autonomous mode
+        print("ROBOT STATE:", robot.state)
+
+        if robot.state == RobotState.FORWARDS:
             left = right = robot.MAX_SPEED
+
+            if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
+                robot.turn_time = time.time()
+                robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
+            elif (time.time() - robot.regroup_time > 5):
+                robot.regroup_time = time.time()
+                robot.state = RobotState.REGROUP
+
+        elif robot.state == RobotState.BACKWARDS:
+            left = right = -robot.MAX_SPEED
+            robot.turn_time = time.time()
+            robot.state = RobotState.FORWARDS
+
+        elif robot.state == RobotState.LEFT:
+            left = -robot.MAX_SPEED
+            right = robot.MAX_SPEED
+
+            if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
+                robot.turn_time = time.time()
+                robot.state = RobotState.FORWARDS
+
+        elif robot.state == RobotState.RIGHT:
+            left = robot.MAX_SPEED
+            right = -robot.MAX_SPEED
+
+            if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
+                robot.turn_time = time.time()
+                robot.state = RobotState.FORWARDS
+
+        elif robot.state == RobotState.STOP:
+            left = right = 0
+            robot.turn_time = time.time()
+            robot.state = RobotState.FORWARDS
+
+        elif robot.state == RobotState.REGROUP:
+            message["set_leds_colour"] = "green"
+            direction = Vector2D(0, 0)
+            for neighbour_id, neighbour in robot.neighbours.items():
+                direction += Vector2D(neighbour["range"] * math.cos(math.radians(neighbour["bearing"])),
+                                      neighbour["range"] * math.sin(math.radians(neighbour["bearing"])))
+            direction_polar = direction.to_polar()
+            heading = angles.normalize(math.degrees(direction_polar[1]), -180, 180)
+            print("heading:", heading)
+            if heading > 0:
+                left = robot.MAX_SPEED
+                right = 0
+            else:
+                left = 0
+                right = robot.MAX_SPEED
+
+            if time.time() - robot.regroup_time > random.uniform(3.0, 4.0):
+                message["set_leds_colour"] = "red"
+                robot.state = RobotState.FORWARDS
 
         message["set_motor_speeds"] = {}
         message["set_motor_speeds"]["left"] = left
         message["set_motor_speeds"]["right"] = right
 
         # Set RGB LEDs based on battery voltage
-        if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
-            message["set_leds_colour"] = "red"
-        else:
-            message["set_leds_colour"] = "green"
+        # if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
+        #     message["set_leds_colour"] = "red"
+        # else:
+        #     message["set_leds_colour"] = "green"
 
         # Send command message
         await robot.connection.send(json.dumps(message))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
-
-
-# Menu state for teleop control input
-class MenuState(Enum):
-    START = 1
-    SELECT = 2
-    DRIVE = 3
-
-
-# Send message to a websocket server
-async def send_message(websocket, message):
-    await websocket.send(json.dumps({"prompt": message}))
-
-
-# Handle message received on the websocket server
-# Used for teleoperation code, which is controlled by running teleop_client.py in a separate terminal.
-async def handler(websocket):
-    state = MenuState.START
-    robot_id = ""
-    valid_robots = list(active_robots.keys())
-    forwards = "w"
-    backwards = "s"
-    left = "a"
-    right = "d"
-    stop = " "
-    release = "q"
-
-    async for packet in websocket:
-        message = json.loads(packet)
-        if "key" in message:
-            key = message["key"]
-            if key == "teleop_start":
-                state = MenuState.START
-            elif key == "teleop_stop":
-                if state == MenuState.DRIVE:
-                    id = int(robot_id)
-                    active_robots[id].teleop = False
-                    active_robots[id].state = RobotState.STOP
-
-            if state == MenuState.START:
-                await send_message(websocket, f"\r\nEnter robot ID ({valid_robots}), then press return: ")
-                robot_id = ""
-                state = MenuState.SELECT
-            elif state == MenuState.SELECT:
-                if key == "\r":
-                    valid = False
-                    try:
-                        if int(robot_id) in valid_robots:
-                            valid = True
-                            await send_message(websocket, f"\r\nControlling robot ({release} to release): " + robot_id)
-                            await send_message(websocket, f"\r\nControls: Forwards = {forwards}; Backwards = {backwards}; Left = {left}; Right = {right}; Stop = SPACE")
-                            active_robots[int(robot_id)].teleop = True
-                            state = MenuState.DRIVE
-                    except ValueError:
-                        pass
-
-                    if not valid:
-                        await send_message(websocket, "\r\nInvalid robot ID, try again: ")
-                        robot_id = ""
-                        state = MenuState.SELECT
-                else:
-                    await send_message(websocket, key)
-                    robot_id = robot_id + key
-            elif state == MenuState.DRIVE:
-                id = int(robot_id)
-                if key == release:
-                    await send_message(websocket, "\r\nReleasing control of robot: " + robot_id)
-                    active_robots[id].teleop = False
-                    active_robots[id].state = RobotState.STOP
-                    state = MenuState.START
-                elif key == forwards:
-                    await send_message(websocket, "\r\nDriving forwards")
-                    active_robots[id].state = RobotState.FORWARDS
-                elif key == backwards:
-                    await send_message(websocket, "\r\nDriving backwards")
-                    active_robots[id].state = RobotState.BACKWARDS
-                elif key == left:
-                    await send_message(websocket, "\r\nTurning left")
-                    active_robots[id].state = RobotState.LEFT
-                elif key == right:
-                    await send_message(websocket, "\r\nTurning right")
-                    active_robots[id].state = RobotState.RIGHT
-                elif key == stop:
-                    await send_message(websocket, "\r\nStopping")
-                    active_robots[id].state = RobotState.STOP
-                else:
-                    await send_message(websocket, "\r\nUnrecognised command")
 
 
 # Main entry point for robot control client sample code
@@ -435,7 +388,7 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = [40]
+    robot_ids = [31, 35, 36]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
@@ -455,11 +408,6 @@ if __name__ == "__main__":
     if not active_robots:
         print(Fore.RED + "[ERROR]: No connection to robots")
         sys.exit(1)
-
-    # Listen for any keyboard input from teleop websocket client
-    print(Fore.GREEN + "[INFO]: Starting teleop server")
-    start_server = websockets.serve(ws_handler=handler, host=None, port=7000, ping_interval=None, ping_timeout=None)
-    loop.run_until_complete(start_server)
 
     # Only communicate with robots that were successfully connected to
     while True:
