@@ -129,7 +129,8 @@ class Zone:
         for id, robot in robots.items():
             if id in self.de_jure_robots:
 
-                if self.x1 > robot.tag.centre.x > self.x2:
+                if self.x1 > robot.tag.centre.x or robot.tag.centre.x > self.x2:
+
                     self.rule_breakers.append(id)
 
         return robots
@@ -602,12 +603,16 @@ class Tracker(threading.Thread):
             zone.checkRobots(self.robots)
             newzones.append(zone)
         self.zones = newzones
-        if len(self.zones[0].de_jure_robots) == 0:
+
+        if len(self.zones[2].de_jure_robots) == 0:
+            print("GGGG")
             newzones = []
             for zone in self.zones:
+                zone.de_jure_robots = []
                 zone.buildDeJure(self.robots)
                 newzones.append(zone)
             self.zones = newzones
+
         if self.timer.status != TimerStatus.PAUSED and self.timer.status != TimerStatus.COMPLETE:
             if self.blue_goal.check(self.ball) or self.red_goal.check(self.ball):
                 self.timer.pause()
