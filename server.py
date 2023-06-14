@@ -371,7 +371,7 @@ class Tracker(threading.Thread):
         colors = [red, purple, blue]
         for zone_index in range(len(self.zones)):
             zone = self.zones[zone_index]
-            cv2.rectangle(image, (int(zone.x1), zone.y1), (int(zone.x2), zone.y2), colors[zone_index % len(colors)], 1, lineType=cv2.LINE_AA)
+            cv2.rectangle(image, (int(zone.x1), zone.y1), (int(zone.x2), zone.y2), colors[zone_index % len(colors)], 3, lineType=cv2.LINE_AA)
 
     def defineGoals(self, goal_width, goal_height):
         x = self.min_x
@@ -383,9 +383,9 @@ class Tracker(threading.Thread):
 
     def drawGoals(self, image):
         cv2.rectangle(image, (self.red_goal.x1, self.red_goal.y1), (self.red_goal.x2, self.red_goal.y2), red,
-                      1, lineType=cv2.LINE_AA)
+                      3, lineType=cv2.LINE_AA)
         cv2.rectangle(image, (self.blue_goal.x1, self.blue_goal.y1), (self.blue_goal.x2, self.blue_goal.y2), blue,
-                      1, lineType=cv2.LINE_AA)
+                      3, lineType=cv2.LINE_AA)
 
 
     """
@@ -520,13 +520,13 @@ class Tracker(threading.Thread):
             elif robot.team == Team.BLUE:
                 teamcolor = blue
             else:
-                teamcolor = yellow
+                teamcolor = magenta
 
-            cv2.putText(image, text, position, font, font_scale, teamcolor, thickness * 3, cv2.LINE_AA)
-            cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+            cv2.putText(image, text, position, font, font_scale, white, thickness * 3, cv2.LINE_AA)
+            cv2.putText(image, text, position, font, font_scale, teamcolor, thickness, cv2.LINE_AA)
 
-            cv2.putText(image, text3, position2, font, font_scale, teamcolor, thickness * 3, cv2.LINE_AA)
-            cv2.putText(image, text3, position2, font, font_scale, white, thickness, cv2.LINE_AA)
+            cv2.putText(image, text3, position2, font, font_scale, white, thickness * 3, cv2.LINE_AA)
+            cv2.putText(image, text3, position2, font, font_scale, teamcolor, thickness, cv2.LINE_AA)
 
 
 
@@ -609,8 +609,8 @@ class Tracker(threading.Thread):
             thickness = 5
             textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
             position = (960 - offset, 540)
-            cv2.putText(image, text, position, font, font_scale * 3, black, thickness * 3, cv2.LINE_AA)
-            cv2.putText(image, text, position, font, font_scale * 3, tcolor, thickness, cv2.LINE_AA)
+            cv2.putText(image, text, position, font, font_scale * 3, tcolor, thickness * 3, cv2.LINE_AA)
+            cv2.putText(image, text, position, font, font_scale * 3, black, thickness, cv2.LINE_AA)
 
     def run(self):
         while True:        
@@ -638,13 +638,14 @@ class Tracker(threading.Thread):
 
                 # Process and draw robots
                 self.processRobots()
-                self.drawRobots(image)
+
 
                 self.drawBall(image)
                 self.drawZones(image)
                 self.drawGoals(image)
                 self.timer.update()
 
+                self.drawRobots(image)
                 self.processGame(image)
 
                 text = f"Time: {self.timer.getString()}"
@@ -655,11 +656,16 @@ class Tracker(threading.Thread):
                 thickness = 5
                 textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                 position = (790, 60)
-                cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                cv2.putText(image, text, position, font, font_scale, self.timer.getColor(), thickness, cv2.LINE_AA)
+                cv2.putText(image, text, position, font, font_scale, self.timer.getColor(), thickness * 3, cv2.LINE_AA)
+                cv2.putText(image, text, position, font, font_scale, black, thickness, cv2.LINE_AA)
 
-                cv2.putText(image, blu_sc, (self.blue_goal.x2 - 40, 1000), font, font_scale * 2, blue, thickness * 3, cv2.LINE_AA)
-                cv2.putText(image, red_sc, (self.red_goal.x1 - 40, 1000), font, font_scale * 2, red, thickness * 3, cv2.LINE_AA)
+                cv2.putText(image, blu_sc, (self.blue_goal.x2 - 40, 1000), font, font_scale * 2, white, thickness * 3, cv2.LINE_AA)
+                cv2.putText(image, red_sc, (self.red_goal.x1 - 40, 1000), font, font_scale * 2, white, thickness * 3, cv2.LINE_AA)
+
+                cv2.putText(image, blu_sc, (self.blue_goal.x2 - 40, 1000), font, font_scale * 2, blue, thickness,
+                            cv2.LINE_AA)
+                cv2.putText(image, red_sc, (self.red_goal.x1 - 40, 1000), font, font_scale * 2, red, thickness,
+                            cv2.LINE_AA)
 
                 # Transparency for overlaid augments
                 alpha = 0.3
