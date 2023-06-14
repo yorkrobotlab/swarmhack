@@ -28,12 +28,6 @@ black = (0, 0, 0)
 white = (255, 255, 255)
 grey = (100, 100, 100)
 
-ball_boundary = ([177, 16, 14], [188, 15, 12])
-
-PUCK_TAG_ID = 6
-
-
-
 class Tag:
     def __init__(self, id, raw_tag):
         self.id = id
@@ -85,6 +79,7 @@ class Ball:
     def __init__(self, position):
         self.position = position
         self.radius = 30
+        self.id = 6
 
     def getPosition(self, scale_factor):
         position = (self.position.x / scale_factor, self.position.y / scale_factor)
@@ -338,13 +333,13 @@ class Tracker(threading.Thread):
             tag = Tag(id, raw_tag)
 
             if self.calibrated:
-                if (tag.id == PUCK_TAG_ID):
+                if (tag.id == self.ball.id):
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)
                     self.ball.position = position
                     self.ball.tag = tag
 
-                if (tag.id not in [0, PUCK_TAG_ID]):  # Reserved tag ID for corners and for ball
+                if (tag.id not in [0, self.ball.id]):  # Reserved tag ID for corners and for ball
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)  # Convert pixel coordinates to metres
                     self.robots[id] = Robot(tag, position)
@@ -404,7 +399,7 @@ class Tracker(threading.Thread):
     tag -- a tag of ID=0
     """
     def calibrate(self, tag):
-        if tag.id == PUCK_TAG_ID:
+        if tag.id == self.ball.id:
             position = Vector2D(0, 0)
             self.ball.position = position
             self.ball.tag = tag
