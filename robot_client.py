@@ -100,7 +100,7 @@ async def send_commands(robot):
 
         """
         Construct a command message
-        Robots are controlled by sending them a json dictionary which we create here using the message variable
+        Robots are controlled by sending them a JSON dictionary which we create here using the message variable
         
         We can set the speed of the wheel motors (from -100 to 100). Setting them to the same value makes the robot go forwards
         or backwards. Setting them differently makes the robot turn. For example:
@@ -114,7 +114,7 @@ async def send_commands(robot):
 
         The rest of this function is an example object avoidance behaviour which goes FORWARD unless the IR sensor
         detects something in front of it, when it will turn instead.
-        It also every 5 seconds attempts to regroup the robots.
+        Then every 5 seconds it attempts to regroup the robots by turning them towards the average bearing of all other robots.
         """
         if robot.state == RobotState.FORWARDS:
             left = right = robot.MAX_SPEED
@@ -127,13 +127,13 @@ async def send_commands(robot):
 
         elif robot.state == RobotState.BACKWARDS:
             left = right = -robot.MAX_SPEED
-            robot.turn_time = time.time()
+            robot.turn_time = time.time() #Note when we started turning
             robot.state = RobotState.FORWARDS
 
         elif robot.state == RobotState.LEFT:
             left = -robot.MAX_SPEED
             right = robot.MAX_SPEED
-            if time.time() - robot.turn_time > random.uniform(0.5, 1.0): # Set a value in the Robot class to turn for an amount of time between 0.5secs and 1sec
+            if time.time() - robot.turn_time > random.uniform(0.5, 1.0): #Ensure we've been turning for some amount of time
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
 
@@ -226,6 +226,11 @@ class Robot:
         self.distance_to_ball = 0
         #Value between 0 and 1 for your x coordinate in your assigned zone. If < 0 or > 1 you are out of your zone. 1 means furthest from your goal.
         self.progress_through_zone = 0 
+
+        self.bearing_to_our_goal = 0
+        self.distance_to_our_goal = 0
+        self.bearing_to_their_goal = 0
+        self.distance_to_their_goal = 0
 
         self.ir_readings = []
         self.battery_charging = False
@@ -400,6 +405,10 @@ async def get_server_data():
             active_robots[id].bearing_to_ball = robot["ball"]["bearing"]
             active_robots[id].distance_to_ball = robot["ball"]["range"]   
             active_robots[id].progress_through_zone = robot["progress_through_zone"]   
+            active_robots[id].bearing_to_our_goal = robot["our_goal"]["bearing"]
+            active_robots[id].distance_to_our_goal = robot["our_goal"]["range"]
+            active_robots[id].bearing_to_their_goal = robot["their_goal"]["bearing"]
+            active_robots[id].distance_to_their_goal = robot["their_goal"]["range"]
               
 
     except Exception as e:
