@@ -28,6 +28,7 @@ grey = (100, 100, 100)
 
 PUCK_ID = 1
 GAME_TIME = 30
+# random.seed(1)
 
 class Tag:
     def __init__(self, id, raw_tag):
@@ -98,6 +99,24 @@ class Zone:
         self.width = width
         self.height = height
 
+        self.centre_x = self.x1 + self.width / 2
+        self.centre_y = self.y1 + self.height / 2
+
+        self.randomise_starting_positions()
+
+    def randomise_starting_positions(self):
+        self.possible_starting_positions = []
+
+        for position in range(4):
+            random_x = random.uniform(self.centre_x - self.width / 4, self.centre_x + self.width / 4)
+            random_y = random.uniform(self.centre_y - self.width / 4, self.centre_y + self.width / 4)
+            self.possible_starting_positions.append((random_x, random_y))
+
+        self.starting_position = self.possible_starting_positions[random.randint(0, 3)]
+
+        return self.starting_position
+
+
     def addDeJure(self, robot):
         self.de_jure_robots.append(robot)
 
@@ -161,6 +180,8 @@ class Goal:
         self.y2 = y + height
 
         self.score = 0
+
+        self.centre = Vector2D((self.x2 - self.x1)/2 + self.x1, (self.y2 - self.y1)/2 + self.y1)
 
     def check(self, ball):
         ball_x = ball.tag.centre.x
@@ -228,6 +249,8 @@ class Timer:
         elif self.status == TimerStatus.PAUSED:
             return grey
         elif self.status == TimerStatus.COMPLETE:
+            return red
+        else:
             return red
 
     def getString(self):
@@ -314,6 +337,10 @@ class Tracker(threading.Thread):
                 self.reset_zone = Zone((self.max_x - self.min_x) / 2 - 75 + self.min_x,
                                        (self.max_y - self.min_y) / 2 + self.min_y - 75, 150, 150)
 
+            if key.char == 'x':
+                for zone in self.zones:
+                    zone.starting_position = zone.randomise_starting_positions()
+
             if key.char == '[':
                 self.blue_goal.score -= 1
             elif key.char == ']':
@@ -388,6 +415,27 @@ class Tracker(threading.Thread):
         for zone_index in range(len(self.zones)):
             zone = self.zones[zone_index]
             cv2.rectangle(image, (int(zone.x1), zone.y1), (int(zone.x2), zone.y2), colors[zone_index % len(colors)], 3, lineType=cv2.LINE_AA)
+
+            cv2.circle(image, (int(zone.starting_position[0]), int(zone.starting_position[1])), 25, red, -1, lineType=cv2.LINE_AA)
+
+            # centre_x = self.min_x + (self.max_x - self.min_x)/2
+            # centre_y = self.min_y + (self.max_y - self.min_y)/2
+            cv2.circle(image, (int(self.min_x + self.max_x - zone.starting_position[0]), int(self.min_y + self.max_y - zone.starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
+
+
+            # opposite_zone = self.zones[len(self.zones)-1 - zone_index]
+            # opposite_starting_position_index = (opposite_zone.starting_position_index + 2) % 4
+            # opposite_starting_position = opposite_zone.possible_starting_positions[opposite_starting_position_index]
+            # cv2.circle(image, (int(opposite_starting_position[0]), int(opposite_starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
+
+            # for starting_position in zone.starting_positions:
+            #     if zone_index == 0:
+            #         cv2.circle(image, (int(starting_position[0]), int(starting_position[1])), 25, red, -1, lineType=cv2.LINE_AA)
+            #         opposite_zone = self.zones[len(self.zones)-1 - zone_index]
+            #         opposite_starting_position_index = (opposite_zone.starting_position_index + 2) % 4
+            #         opposite_starting_position = opposite_zone.possible_starting_positions[opposite_starting_position_index]
+            #         cv2.circle(image, (int(opposite_starting_position[0]), int(opposite_starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
+
 
     def defineGoals(self, goal_width, goal_height):
         x = self.min_x
@@ -478,11 +526,35 @@ class Tracker(threading.Thread):
             for zone in self.zones:
                 if id in zone.de_jure_robots:
                     robot.distance = (robot.tag.centre.x - zone.x1) / zone.width
-                    robot.out_of_bounds = False
+                    if self.robots[id].team == Team.BLUE:
+                        robot.distance = 1 - robot.distance
                     break
             else:
                 robot.distance = 0  # this is not special its just here to hopefully avoid future errors
-                robot.out_of_bounds = True
+
+
+            range = robot.position.distance_to(self.red_goal.centre / self.scale_factor)
+            absolute_bearing = math.degrees(math.atan2((self.red_goal.centre.y / self.scale_factor) - robot.position.y,
+                                                       (self.red_goal.centre.x / self.scale_factor) - robot.position.x))
+            relative_bearing = absolute_bearing - robot.orientation
+            normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+            goal1 = SensorReading(range, normalised_bearing)
+
+            range = robot.position.distance_to(self.blue_goal.centre / self.scale_factor)
+            absolute_bearing = math.degrees(math.atan2((self.blue_goal.centre.y / self.scale_factor) - robot.position.y,
+                                                       (self.blue_goal.centre.x / self.scale_factor) - robot.position.x))
+            relative_bearing = absolute_bearing - robot.orientation
+            normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+            goal2 = SensorReading(range, normalised_bearing)
+
+            if robot.team == Team.BLUE:
+                robot.strike_goal = goal1
+                robot.defend_goal = goal2
+            else:
+                robot.strike_goal = goal2
+                robot.defend_goal = goal1
+
+
 
     """
     Draws bounding box of the arena.
@@ -516,10 +588,7 @@ class Tracker(threading.Thread):
 
             # Draw line from centre point to front of tag
             forward_point = ((tag.front - tag.centre) * 2) + tag.centre
-            cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), black, 10,
-                     lineType=cv2.LINE_AA)
-            cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3,
-                     lineType=cv2.LINE_AA)
+
 
             # Draw tag ID
 
@@ -531,8 +600,8 @@ class Tracker(threading.Thread):
                 text2 = ""
 
             text = robot.role.name
-            #text3 = str(round(robot.distance, 2))
-            text3 = str(tag.id)
+            # text3 = str(round(robot.distance, 2))
+            text3 = str(robot.tag.id)
 
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 1.5
@@ -553,13 +622,16 @@ class Tracker(threading.Thread):
 
             cv2.putText(image, text3, position2, font, font_scale, white, thickness * 3, cv2.LINE_AA)
             cv2.putText(image, text3, position2, font, font_scale, teamcolor, thickness, cv2.LINE_AA)
-
+            cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), black, 10,
+                     lineType=cv2.LINE_AA)
+            cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3,
+                     lineType=cv2.LINE_AA)
 
 
     def drawBall(self, image):
         cv2.circle(image, (self.ball.tag.centre.x, self.ball.tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
 
-        text = "PUCK"
+        text = "BALL"
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 1.5
         thickness = 4
@@ -589,15 +661,15 @@ class Tracker(threading.Thread):
         #     #robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
 
 
-        if len(self.zones[0].de_jure_robots) == 0:
-            newzones = []
-            zone_role = 0
-            for zone in self.zones:
-                zone.de_jure_robots = []
-                self.robots = zone.buildDeJure(self.robots, Role(zone_role))
-                newzones.append(zone)
-                zone_role += 1
-            self.zones = newzones
+        # if len(self.zones[0].de_jure_robots) == 0:
+        #     newzones = []
+        #     zone_role = 0
+        #     for zone in self.zones:
+        #         zone.de_jure_robots = []
+        #         self.robots = zone.buildDeJure(self.robots, Role(zone_role))
+        #         newzones.append(zone)
+        #         zone_role += 1
+        #     self.zones = newzones
 
         if self.timer.status != TimerStatus.PAUSED and self.timer.status != TimerStatus.COMPLETE:
             if self.blue_goal.check(self.ball) or self.red_goal.check(self.ball):
@@ -675,6 +747,10 @@ class Tracker(threading.Thread):
                 self.drawRobots(image)
                 self.processGame(image)
 
+                cv2.circle(image, (int(self.red_goal.centre.x), int(self.red_goal.centre.y)), 5, red, -1, lineType=cv2.LINE_AA)
+                cv2.circle(image, (int(self.blue_goal.centre.x), int(self.blue_goal.centre.y)), 5, blue, -1,
+                           lineType=cv2.LINE_AA)
+
                 text = f"Time: {self.timer.getString()}"
                 red_sc = str(self.blue_goal.score) # THIS IS CORRECT
                 blu_sc = str(self.red_goal.score)
@@ -737,12 +813,21 @@ async def handler(websocket):
                     reply[id]["players"] = {}
                     reply[id]["remaining_time"] = int(tracker.timer.time_left)
                     reply[id]["progress_through_zone"] = round(robot.distance, 2)
+
                     reply[id]["ball"] = {}
                     reply[id]["ball"]["range"] = round(robot.ball.range, 2)
                     reply[id]["ball"]["bearing"] = round(robot.ball.bearing, 2)
 
+                    reply[id]["their_goal"] = {}
+                    reply[id]["their_goal"]["range"] = round(robot.strike_goal.range, 2)
+                    reply[id]["their_goal"]["bearing"] = round(robot.strike_goal.bearing, 2)
+
+                    reply[id]["our_goal"] = {}
+                    reply[id]["our_goal"]["range"] = round(robot.defend_goal.range, 2)
+                    reply[id]["our_goal"]["bearing"] = round(robot.defend_goal.bearing, 2)
+
                     for neighbour_id, neighbour in robot.neighbours.items():
-                        print(neighbour_id)
+
                         neighbour_robot = tracker.robots[neighbour_id]
                         reply[id]["players"][neighbour_id] = {}
                         reply[id]["players"][neighbour_id]["team"] = neighbour_robot.team.name
@@ -750,7 +835,7 @@ async def handler(websocket):
                         reply[id]["players"][neighbour_id]["range"] = round(neighbour.range, 2)
                         reply[id]["players"][neighbour_id]["bearing"] = round(neighbour.bearing, 2)
                         reply[id]["players"][neighbour_id]["orientation"] = round(neighbour.orientation, 2)
-                    print("//////")
+
 
             # Send reply, if requested
             if send_reply:
