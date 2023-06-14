@@ -37,9 +37,8 @@ main_loop() using loop.run_until_complete(async_thing_to_run(ids))
 robot_ids = [31, 32, 38]
 
 def main_loop():
-    # This requests all robot virtual sensor data from the tracking server for the robots specified in robot_ids
+    # This requests all virtual sensor data from the tracking server for the robots specified in robot_ids
     # This is stored in the global variable active_robots, a map of id -> instances of the Robot class (defined lower in this file) 
-    # Look down in send_commands() to see how this is used.
     print(Fore.GREEN + "[INFO]: Requesting data from tracking server")
     loop.run_until_complete(get_server_data())
 
@@ -85,11 +84,10 @@ async def send_commands(robot):
               'team': 'BLUE'},
 
     Print it with pprint.PrettyPrinter(indent=2).pprint(robot.neighbours)
-
     """
 
     try:
-        # Turn off LEDs and motors when killed. Please remember to do this!
+        # Turn off LEDs and motors when killed. Please do this!
         if kill_now():
             message = {"set_leds_colour": "off", "set_motor_speeds": {}}
             message["set_motor_speeds"]["left"] = 0
@@ -144,16 +142,15 @@ async def send_commands(robot):
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
 
+        #Robots are created in the STOP state
         elif robot.state == RobotState.STOP:
             left = right = 0
             robot.turn_time = time.time()
             robot.state = RobotState.FORWARDS
 
-        
-        #In the regroup state, try to group back together
+        #In the regroup state, they try to group back together
         #This is an example of using the robot.neighbours map to set our target direction based on where other robots are.
         #It will get vectors to all other robots, average the direction, and so move the "middle" of the swarm
-        
         elif robot.state == RobotState.REGROUP:
             message["set_leds_colour"] = "green"
 
@@ -181,6 +178,48 @@ async def send_commands(robot):
                 message["set_leds_colour"] = "red"
                 robot.state = RobotState.FORWARDS
 
+        #This is an example state for moving towards the ball
+        elif robot.state == RobotState.TO_BALL:
+            message["set_leds_colour"] = "yellow"
+            if robot.distance_to_ball < 0.1:
+                robot.state = RobotState.TO_OUR_GOAL
+            if abs(robot.bearing_to_ball) < 20:
+                 left = right = robot.MAX_SPEED
+            elif robot.bearing_to_ball > 0:
+                left = int(float(robot.MAX_SPEED)/1.4) #If we do a "full speed turn" then they overshoot. 
+                right = -int(float(robot.MAX_SPEED)/1.4) #A good implementation would turn at a speed based on how misalaigned they are
+            else:
+                left = -int(float(robot.MAX_SPEED)/1.4)
+                right = int(float(robot.MAX_SPEED)/1.4)
+
+        #This is an example state for moving towards our goal
+        elif robot.state == RobotState.TO_OUR_GOAL:
+            if robot.distance_to_our_goal < 0.2:
+                robot.state = RobotState.TO_THEIR_GOAL
+            message["set_leds_colour"] = "cyan"
+            if abs(robot.bearing_to_our_goal) < 20:
+                 left = right = robot.MAX_SPEED
+            elif robot.bearing_to_our_goal > 0:
+                left = int(float(robot.MAX_SPEED)/1.4)
+                right = -int(float(robot.MAX_SPEED)/1.4)
+            else:
+                left = -int(float(robot.MAX_SPEED)/1.4)
+                right = int(float(robot.MAX_SPEED)/1.4)
+
+        #This is an example state for moving towards their goal
+        elif robot.state == RobotState.TO_THEIR_GOAL:
+            if robot.distance_to_their_goal < 0.2:
+                robot.state = RobotState.TO_BALL
+            message["set_leds_colour"] = "magenta"
+            if abs(robot.bearing_to_their_goal) < 20:
+                 left = right = robot.MAX_SPEED
+            elif robot.bearing_to_their_goal > 0:
+                left = int(float(robot.MAX_SPEED)/1.4) 
+                right = -int(float(robot.MAX_SPEED)/1.4)
+            else:
+                left = -int(float(robot.MAX_SPEED)/1.4)
+                right = int(float(robot.MAX_SPEED)/1.4)
+
         message["set_motor_speeds"] = {}
         message["set_motor_speeds"]["left"] = left
         message["set_motor_speeds"]["right"] = right
@@ -205,6 +244,9 @@ class RobotState(Enum):
     RIGHT = 4
     STOP = 5
     REGROUP = 6
+    TO_BALL = 7
+    TO_OUR_GOAL = 8
+    TO_THEIR_GOAL = 9
 
 # Main Robot class to keep track of robot states
 class Robot:
@@ -244,9 +286,9 @@ class Robot:
 
 
 
-#------------------------------------------------------
+#-----------------------------------------------------------------
 # You probably don't need to change anything below here
-#------------------------------------------------------
+#-----------------------------------------------------------------
 
 
 active_robots = {} 
