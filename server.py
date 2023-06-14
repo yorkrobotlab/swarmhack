@@ -529,9 +529,10 @@ class Tracker(threading.Thread):
                     break
             else:
                 text2 = ""
-            #text = str(tag.id)
+
             text = robot.role.name
-            text3 = str(round(robot.distance, 2))
+            #text3 = str(round(robot.distance, 2))
+            text3 = str(tag.id)
 
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 1.5
@@ -730,24 +731,26 @@ async def handler(websocket):
                 for id, robot in tracker.robots.items():
 
                     reply[id] = {}
-                    reply[id]["orientation"] = robot.orientation
+                    reply[id]["orientation"] = round(robot.orientation, 2)
                     reply[id]["role"] = robot.role.name
                     reply[id]["team"] = robot.team.name
                     reply[id]["players"] = {}
                     reply[id]["remaining_time"] = int(tracker.timer.time_left)
-                    reply[id]["dist_from_zone_edges"] = robot.distance
+                    reply[id]["progress_through_zone"] = round(robot.distance, 2)
                     reply[id]["ball"] = {}
-                    reply[id]["ball"]["range"] = robot.ball.range
-                    reply[id]["ball"]["bearing"] = robot.ball.bearing
+                    reply[id]["ball"]["range"] = round(robot.ball.range, 2)
+                    reply[id]["ball"]["bearing"] = round(robot.ball.bearing, 2)
 
                     for neighbour_id, neighbour in robot.neighbours.items():
+                        print(neighbour_id)
                         neighbour_robot = tracker.robots[neighbour_id]
-                        reply[id]["players"][neighbour_robot.team.name] = {}
-                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name] = {}
-                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["range"] = neighbour.range
-                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["bearing"] = neighbour.bearing
-                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["orientation"] = neighbour.orientation
-
+                        reply[id]["players"][neighbour_id] = {}
+                        reply[id]["players"][neighbour_id]["team"] = neighbour_robot.team.name
+                        reply[id]["players"][neighbour_id]["role"] = neighbour_robot.role.name
+                        reply[id]["players"][neighbour_id]["range"] = round(neighbour.range, 2)
+                        reply[id]["players"][neighbour_id]["bearing"] = round(neighbour.bearing, 2)
+                        reply[id]["players"][neighbour_id]["orientation"] = round(neighbour.orientation, 2)
+                    print("//////")
 
             # Send reply, if requested
             if send_reply:
