@@ -140,6 +140,7 @@ class Zone:
                 else:
                     robot.role = Role.NOMAD
                 robots[id] = robot
+        return robots
     def getZone(self):
         return (self.x1, self.x2)
 
@@ -318,7 +319,7 @@ class Tracker(threading.Thread):
                 zone_role = 0
                 for zone in self.zones:
                     zone.de_jure_robots = []
-                    zone.buildDeJure(self.robots, zone_role)
+                    self.robots = zone.buildDeJure(self.robots, Role(zone_role))
                     zone_role += 1
                     newzones.append(zone)
                 self.zones = newzones
@@ -676,7 +677,7 @@ class Tracker(threading.Thread):
             zone_role = 0
             for zone in self.zones:
                 zone.de_jure_robots = []
-                zone.buildDeJure(self.robots, zone_role)
+                self.robots = zone.buildDeJure(self.robots, Role(zone_role))
                 newzones.append(zone)
                 zone_role += 1
             self.zones = newzones
