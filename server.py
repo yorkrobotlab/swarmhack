@@ -14,6 +14,7 @@ import random
 import angles
 import time
 from enum import Enum
+from math import sqrt
 import numpy as np
 
 red = (0, 0, 255)
@@ -29,7 +30,7 @@ grey = (100, 100, 100)
 
 ball_boundary = ([177, 16, 14], [188, 15, 12])
 
-
+PUCK_TAG_ID = 6
 
 
 
@@ -76,12 +77,34 @@ class Robot:
         self.neighbours = {}
         self.tasks = {}
         self.out_of_bounds = False
+        self.distance = (1000, 1000)
+        self.ball_dist = (1000, 1000)
 
 
 class Ball:
     def __init__(self, position):
         self.position = position
         self.radius = 30
+
+    def getPosition(self, scale_factor):
+        position = (self.position.x / scale_factor, self.position.y / scale_factor)
+        return position
+
+    def getDistanceFromRobot(self, robot, scale_factor):
+        x_diff = self.getPosition(scale_factor)[0] - robot.position.x
+        y_diff = self.getPosition(scale_factor)[1] - robot.position.y
+
+        sq_dist = x_diff ** 2 + y_diff ** 2
+
+        return sqrt(sq_dist)
+
+    def getBearingFromRobot(self, robot, scale_factor):
+
+        absolute_bearing = math.degrees(
+            math.atan2(self.getPosition(scale_factor)[1] - robot.position.y, self.getPosition(scale_factor)[0] - robot.position.x))
+        relative_bearing = absolute_bearing - robot.orientation
+        normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+        return normalised_bearing
 
 
 class Zone:
@@ -284,6 +307,21 @@ class Tracker(threading.Thread):
                 for zone in self.zones:
                     print(zone.rule_breakers, zone.x1, zone.x2)
                     print(zone.de_jure_robots)
+            if key.char == 'b':
+                newzones = []
+                for zone in self.zones:
+                    zone.de_jure_robots = []
+                    zone.buildDeJure(self.robots)
+                    newzones.append(zone)
+                self.zones = newzones
+            if key.char == '[':
+                self.blue_goal.score -= 1
+            elif key.char == ']':
+                self.blue_goal.score += 1
+            elif key.char == ',':
+                self.red_goal.score -= 1
+            elif key.char == '.':
+                self.red_goal.score += 1
         except AttributeError:
             print('special key {0} pressed'.format(
                 key))
@@ -300,13 +338,13 @@ class Tracker(threading.Thread):
             tag = Tag(id, raw_tag)
 
             if self.calibrated:
-                if (tag.id == 6):
+                if (tag.id == PUCK_TAG_ID):
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)
                     self.ball.position = position
                     self.ball.tag = tag
 
-                if (tag.id not in [0, 6]):  # Reserved tag ID for corners and for ball
+                if (tag.id not in [0, PUCK_TAG_ID]):  # Reserved tag ID for corners and for ball
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)  # Convert pixel coordinates to metres
                     self.robots[id] = Robot(tag, position)
@@ -366,7 +404,7 @@ class Tracker(threading.Thread):
     tag -- a tag of ID=0
     """
     def calibrate(self, tag):
-        if tag.id == 6:
+        if tag.id == PUCK_TAG_ID:
             position = Vector2D(0, 0)
             self.ball.position = position
             self.ball.tag = tag
@@ -397,7 +435,7 @@ class Tracker(threading.Thread):
                 self.centre = Vector2D(x, y)
 
                 self.defineZones(3)
-                self.defineGoals(250, 500)
+                self.defineGoals(int((self.max_x - self.min_x) / 7), int((self.max_y - self.min_y) / 2))
                 self.timer = Timer(180)
                 self.timer.start()
 
@@ -603,9 +641,18 @@ class Tracker(threading.Thread):
             zone.checkRobots(self.robots)
             newzones.append(zone)
         self.zones = newzones
+        for id, robot in self.robots.items():
+            for zone in self.zones:
+                if id in zone.de_jure_robots:
+                    robot.distance = ((zone.x1 - robot.tag.centre.x) / self.scale_factor, (zone.x2 - robot.tag.centre.x) / self.scale_factor)
+                    break
+            else:
+                robot.distance = (1000, 1000)  # this is not special its just here to hopefully avoid future errors
 
-        if len(self.zones[2].de_jure_robots) == 0:
-            print("GGGG")
+            robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
+
+
+        if len(self.zones[0].de_jure_robots) == 0:
             newzones = []
             for zone in self.zones:
                 zone.de_jure_robots = []
@@ -617,7 +664,7 @@ class Tracker(threading.Thread):
             if self.blue_goal.check(self.ball) or self.red_goal.check(self.ball):
                 self.timer.pause()
                 self.gameState = 1
-                self.reset_zone = Zone((self.max_x - self.min_x) / 2, (self.max_y - self.min_y) / 2, 150, 150)
+                self.reset_zone = Zone((self.max_x - self.min_x)/2 - 75 + self.min_x, (self.max_y - self.min_y)/2 + self.min_y - 75, 150, 150)
         if self.timer.status == TimerStatus.PAUSED and self.gameState == 1:
             cv2.rectangle(image, (int(self.reset_zone.x1), int(self.reset_zone.y1)),
                           (int(self.reset_zone.x2), int(self.reset_zone.y2)),
@@ -736,13 +783,16 @@ async def handler(websocket):
             send_reply = True
 
         if "get_robots" in message:
-
+            send_reply = True
             for id, robot in tracker.robots.items():
+
                 reply[id] = {}
                 reply[id]["orientation"] = robot.orientation
                 reply[id]["neighbours"] = {}
                 reply[id]["tasks"] = {}
                 reply[id]["remaining_time"] = int(tracker.timer.time_left)
+                reply[id]["dist_from_zone_edges"] = robot.distance
+                reply[id]["ball"] = robot.ball_dist  # distance, bearing
 
                 for neighbour_id, neighbour in robot.neighbours.items():
                     reply[id]["neighbours"][neighbour_id] = {}
@@ -756,11 +806,6 @@ async def handler(websocket):
                     reply[id]["tasks"][task_id]["bearing"] = task.bearing
                     reply[id]["tasks"][task_id]["workers"] = task.workers
 
-        if "get_ball" in message:
-            reply['ball'] = {}
-            reply['ball']['position'] = [tracker.ball.position.x, tracker.ball.position.y]
-
-            send_reply = True
 
         # Send reply, if requested
         if send_reply:
