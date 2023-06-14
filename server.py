@@ -27,6 +27,7 @@ white = (255, 255, 255)
 grey = (100, 100, 100)
 
 PUCK_ID = 1
+GAME_TIME = 30
 
 class Tag:
     def __init__(self, id, raw_tag):
@@ -189,6 +190,7 @@ class TimerStatus(Enum):
 class Timer:
     def __init__(self, time_limit):
         self.time_limit = time_limit
+        self.time_left = time_limit
         self.status = TimerStatus.STOPPED
         self.elapsed_time = 0
         self.start_time = 0
@@ -258,12 +260,12 @@ class Tracker(threading.Thread):
         self.scale_factor = 0
         self.robots = {}
 
-        self.red_score = 0
-        self.blue_score = 0
+        self.red_goal = None
+        self.blue_goal = None
         self.ball = None
         self.zones = []
         self.gameState = 0
-        self.timer = Timer(1000)
+        self.timer = Timer(GAME_TIME)
         self.roboteams = {}
 
 
@@ -295,9 +297,20 @@ class Tracker(threading.Thread):
                     zone_role += 1
                     newzones.append(zone)
                 self.zones = newzones
-            if key.char == 'a':
+            if key.char == 't':
                 self.robots = self.zones[0].assignTeam(self.robots, Team.RED)
                 self.robots = self.zones[len(self.zones)-1].assignTeam(self.robots, Team.BLUE)
+
+            if key.char == 'r':
+                self.timer = Timer(GAME_TIME)
+                self.timer.start()
+                self.timer.pause()
+                self.red_goal.score = 0
+                self.blue_goal.score = 0
+                self.gameState = 1
+                self.reset_zone = Zone((self.max_x - self.min_x) / 2 - 75 + self.min_x,
+                                       (self.max_y - self.min_y) / 2 + self.min_y - 75, 150, 150)
+
             if key.char == '[':
                 self.blue_goal.score -= 1
             elif key.char == ']':
@@ -368,7 +381,7 @@ class Tracker(threading.Thread):
     image -- camera image for the zones to be drawn on top of.
     """
     def drawZones(self, image):
-        colors = [red, purple, blue]
+        colors = [red, grey, blue]
         for zone_index in range(len(self.zones)):
             zone = self.zones[zone_index]
             cv2.rectangle(image, (int(zone.x1), zone.y1), (int(zone.x2), zone.y2), colors[zone_index % len(colors)], 3, lineType=cv2.LINE_AA)
@@ -424,7 +437,7 @@ class Tracker(threading.Thread):
 
                 self.defineZones(3)
                 self.defineGoals(int((self.max_x - self.min_x) / 7), int((self.max_y - self.min_y) / 2))
-                self.timer.start()
+
 
                 self.calibrated = True
 
@@ -580,7 +593,7 @@ class Tracker(threading.Thread):
         if self.timer.status == TimerStatus.PAUSED and self.gameState == 1:
             cv2.rectangle(image, (int(self.reset_zone.x1), int(self.reset_zone.y1)),
                           (int(self.reset_zone.x2), int(self.reset_zone.y2)),
-                          green, 1, lineType=cv2.LINE_AA)
+                          green, 2, lineType=cv2.LINE_AA)
             if self.reset_zone.contains(self.ball):
                 self.timer.unpause()
                 self.gameState = 0
