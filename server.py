@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
 from pynput import keyboard
 import math
 import threading
@@ -15,7 +14,7 @@ import angles
 import time
 from enum import Enum
 from math import sqrt
-import numpy as np
+from ballgame_roles import *
 
 red = (0, 0, 255)
 green = (0, 255, 0)
@@ -64,6 +63,8 @@ class Robot:
         self.out_of_bounds = False
         self.distance = None
         self.ball_dist = None
+        self.team = None
+        self.role = None
 
 
 class Ball:
@@ -125,10 +126,10 @@ class Zone:
         return False
 
     def buildDeJure(self, robots):
+        newrobots = {}
         for id, robot in robots.items():
             if self.x1 <= robot.tag.centre.x <= self.x2:
                 self.de_jure_robots.append(id)
-
     def getZone(self):
         return (self.x1, self.x2)
 
@@ -142,6 +143,14 @@ class Zone:
 
                     self.rule_breakers.append(id)
 
+        return robots
+
+    def assignTeam(self, robots, team):
+
+        for id, robot in robots.items():
+            if self.x1 <= robot.tag.centre.x <= self.x2:
+                robot.team = team
+            print(id, robot.team)
         return robots
 
 
@@ -275,6 +284,7 @@ class Tracker(threading.Thread):
         self.zones = []
         self.gameState = 0
         self.timer = Timer(1000)
+        self.roboteams = {}
 
 
 
@@ -301,6 +311,11 @@ class Tracker(threading.Thread):
                     zone.buildDeJure(self.robots)
                     newzones.append(zone)
                 self.zones = newzones
+            if key.char == 'a':
+                self.robots = self.zones[0].assignTeam(self.robots, Team.RED)
+                self.robots = self.zones[len(self.zones)-1].assignTeam(self.robots, Team.BLUE)
+                for id, robot in self.robots.items():
+                    print(robot.team)
             if key.char == '[':
                 self.blue_goal.score -= 1
             elif key.char == ']':
@@ -309,9 +324,10 @@ class Tracker(threading.Thread):
                 self.red_goal.score -= 1
             elif key.char == '.':
                 self.red_goal.score += 1
-        except AttributeError:
+        except AttributeError as e:
             print('special key {0} pressed'.format(
                 key))
+            print(e)
     """
     processes raw tags and updates self.robots to contain a dictionary of all visible robots and their IDs
     
@@ -334,6 +350,7 @@ class Tracker(threading.Thread):
                 if (tag.id not in [0, self.ball.id]):  # Reserved tag ID for corners and for ball
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)  # Convert pixel coordinates to metres
+
                     self.robots[id] = Robot(tag, position)
             else:  # Only calibrate the first time two corner tags are detected
                 self.calibrate(tag)
@@ -347,7 +364,6 @@ class Tracker(threading.Thread):
     def defineZones(self, zone_amount, offset=150):
         max_width = self.max_x - self.min_x
         zone_width = max_width / zone_amount
-
 
         x = self.min_x + offset/2
         for zone in range(zone_amount):
@@ -601,10 +617,15 @@ class Tracker(threading.Thread):
             textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
             position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2 - 3))
             cv2.putText(image, text2, position, font, font_scale * 3, red, thickness * 4, cv2.LINE_AA)
-            if tag.id % 2 == 0:
-                cv2.putText(image, text, position, font, font_scale, red, thickness * 3, cv2.LINE_AA)
+            print(robot.team)
+            if robot.team == Team.RED:
+                teamcolor = red
+            elif robot.team == Team.BLUE:
+                teamcolor = blue
             else:
-                cv2.putText(image, text, position, font, font_scale, blue, thickness * 3, cv2.LINE_AA)
+                teamcolor = yellow
+
+            cv2.putText(image, text, position, font, font_scale, teamcolor, thickness * 3, cv2.LINE_AA)
             cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
 
