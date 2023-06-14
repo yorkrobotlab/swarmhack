@@ -51,15 +51,6 @@ class Tag:
         # Calculate orientation of tag
         self.forward = math.atan2(self.front.y - self.centre.y, self.front.x - self.centre.x) # Forward vector
         self.angle = math.degrees(self.forward) # Angle between forward vector and x-axis
-class StartingPosition:
-    def __init__(self, x, y, x_min, x_max, y_min, y_max):
-        self.x = x_min + x
-        self.y = y_min + y
-
-        self.x2 = x_max - x
-        self.y2 = y_max - y
-
-
 
 class Robot:
     def __init__(self, tag, position):
