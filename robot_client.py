@@ -68,16 +68,17 @@ def kill_now() -> bool:
 
 # Ctrl+C termination handled
 ##
-class Ball():
-    def __init__(self, position):
-        self.position = position
+
+# class Ball():
+#     def __init__(self, position):
+#         self.position = position
 
 
 
 server_connection = None
 active_robots = {}
 ids = []
-ball = Ball([0, 0])
+# ball = Ball([0, 0])
 
 
 # Robot states to use in the controller
@@ -214,17 +215,18 @@ async def message_robots(ids, function):
 async def get_server_data():
     try:
         global ids
-        global ball
-        message = {"get_robots": True, "get_ball": True}
+        # global ball
+        # message = {"get_robots": True, "get_ball": True}
+        message = {"get_robots": True}
 
         # Send request for data and wait for reply
         await server_connection.send(json.dumps(message))
         reply_json = await server_connection.recv()
         reply = json.loads(reply_json)
 
-        ball.position = reply["ball"]["position"]
-        print(ball.position)
-        del reply['ball']
+        # ball.position = reply["ball"]["position"]
+        # print(ball.position)
+        # del reply['ball']
 
         # Filter reply from the server, based on our active robots of interest
         filtered_reply = {int(k): v for (k, v) in reply.items() if int(k) in active_robots.keys()}
@@ -388,7 +390,7 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = [31, 35, 36]
+    robot_ids = [34, 37, 39]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
