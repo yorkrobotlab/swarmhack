@@ -62,8 +62,8 @@ class Robot:
         self.neighbours = {}
         self.tasks = {}
         self.out_of_bounds = False
-        self.distance = (1000, 1000)
-        self.ball_dist = (1000, 1000)
+        self.distance = None
+        self.ball_dist = None
 
 
 class Ball:
@@ -274,6 +274,7 @@ class Tracker(threading.Thread):
         self.ball = Ball((0, 0))
         self.zones = []
         self.gameState = 0
+        self.timer = Timer(1000)
 
 
 
@@ -391,8 +392,7 @@ class Tracker(threading.Thread):
     """
     def calibrate(self, tag):
         if tag.id == self.ball.id:
-            position = Vector2D(0, 0)
-            self.ball.position = position
+            self.ball.position = None
             self.ball.tag = tag
 
         if tag.id == 0:  # Reserved tag ID for corners
@@ -422,7 +422,6 @@ class Tracker(threading.Thread):
 
                 self.defineZones(3)
                 self.defineGoals(int((self.max_x - self.min_x) / 7), int((self.max_y - self.min_y) / 2))
-                self.timer = Timer(180)
                 self.timer.start()
 
                 self.calibrated = True
@@ -631,10 +630,11 @@ class Tracker(threading.Thread):
             for zone in self.zones:
                 if id in zone.de_jure_robots:
                     robot.distance = ((zone.x1 - robot.tag.centre.x) / self.scale_factor, (zone.x2 - robot.tag.centre.x) / self.scale_factor)
+                    robot.out_of_bounds = False
                     break
             else:
-                robot.distance = (1000, 1000)  # this is not special its just here to hopefully avoid future errors
-
+                robot.distance = None  # this is not special its just here to hopefully avoid future errors
+                robot.out_of_bounds = True
             robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
 
 
