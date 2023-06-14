@@ -533,13 +533,16 @@ class Tracker(threading.Thread):
     def drawBall(self, image):
         cv2.circle(image, (self.ball.tag.centre.x, self.ball.tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
 
-        text = "Puck"
+        text = "PUCK"
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 1.5
         thickness = 4
         textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
         position = (int(self.ball.tag.centre.x - textsize[0] / 2), int(self.ball.tag.centre.y + textsize[1] / 2))
-        cv2.putText(image, text, position, font, font_scale, green, thickness * 3, cv2.LINE_AA)
+
+        cv2.putText(image, text, position, font, font_scale, white, thickness * 3, cv2.LINE_AA)
+        cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+
 
     def processGame(self, image):
         newzones = []
