@@ -811,17 +811,19 @@ async def handler(websocket):
 
                     reply[id] = {}
                     reply[id]["orientation"] = robot.orientation
-                    reply[id]["neighbours"] = {}
+                    reply[id]["players"] = {}
                     reply[id]["tasks"] = {}
                     reply[id]["remaining_time"] = int(tracker.timer.time_left)
                     #reply[id]["dist_from_zone_edges"] = robot.distance
                     #reply[id]["ball"] = robot.ball_dist  # distance, bearing
 
                     for neighbour_id, neighbour in robot.neighbours.items():
-                        reply[id]["neighbours"][neighbour_id] = {}
-                        reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
-                        reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
-                        reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
+                        neighbour_robot = tracker.robots[neighbour_id]
+                        reply[id]["players"][neighbour_robot.team.name] = {}
+                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name] = {}
+                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["range"] = neighbour.range
+                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["bearing"] = neighbour.bearing
+                        reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["orientation"] = neighbour.orientation
 
                     for task_id, task in robot.tasks.items():
                         reply[id]["tasks"][task_id] = {}
