@@ -329,8 +329,8 @@ class Tracker(threading.Thread):
 
             if key.char == 'r':
                 self.timer = Timer(GAME_TIME)
-                self.timer.start()
-                self.timer.pause()
+                # self.timer.start()
+                # self.timer.pause()
                 self.red_goal.score = 0
                 self.blue_goal.score = 0
                 self.gameState = 1
@@ -416,25 +416,9 @@ class Tracker(threading.Thread):
             zone = self.zones[zone_index]
             cv2.rectangle(image, (int(zone.x1), zone.y1), (int(zone.x2), zone.y2), colors[zone_index % len(colors)], 3, lineType=cv2.LINE_AA)
 
-            cv2.circle(image, (int(zone.starting_position[0]), int(zone.starting_position[1])), 25, red, -1, lineType=cv2.LINE_AA)
-
-            # centre_x = self.min_x + (self.max_x - self.min_x)/2
-            # centre_y = self.min_y + (self.max_y - self.min_y)/2
-            cv2.circle(image, (int(self.min_x + self.max_x - zone.starting_position[0]), int(self.min_y + self.max_y - zone.starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
-
-
-            # opposite_zone = self.zones[len(self.zones)-1 - zone_index]
-            # opposite_starting_position_index = (opposite_zone.starting_position_index + 2) % 4
-            # opposite_starting_position = opposite_zone.possible_starting_positions[opposite_starting_position_index]
-            # cv2.circle(image, (int(opposite_starting_position[0]), int(opposite_starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
-
-            # for starting_position in zone.starting_positions:
-            #     if zone_index == 0:
-            #         cv2.circle(image, (int(starting_position[0]), int(starting_position[1])), 25, red, -1, lineType=cv2.LINE_AA)
-            #         opposite_zone = self.zones[len(self.zones)-1 - zone_index]
-            #         opposite_starting_position_index = (opposite_zone.starting_position_index + 2) % 4
-            #         opposite_starting_position = opposite_zone.possible_starting_positions[opposite_starting_position_index]
-            #         cv2.circle(image, (int(opposite_starting_position[0]), int(opposite_starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
+            if self.timer.status == TimerStatus.STOPPED:
+                cv2.circle(image, (int(zone.starting_position[0]), int(zone.starting_position[1])), 25, red, -1, lineType=cv2.LINE_AA)
+                cv2.circle(image, (int(self.min_x + self.max_x - zone.starting_position[0]), int(self.min_y + self.max_y - zone.starting_position[1])), 25, blue, -1, lineType=cv2.LINE_AA)
 
 
     def defineGoals(self, goal_width, goal_height):
@@ -649,34 +633,12 @@ class Tracker(threading.Thread):
             newzones.append(zone)
         self.zones = newzones
 
-        # for id, robot in self.robots.items():
-        #     for zone in self.zones:
-        #         if id in zone.de_jure_robots:
-        #             robot.distance = ((zone.x1 - robot.tag.centre.x) / self.scale_factor, (zone.x2 - robot.tag.centre.x) / self.scale_factor)
-        #             robot.out_of_bounds = False
-        #             break
-        #     else:
-        #         robot.distance = None  # this is not special its just here to hopefully avoid future errors
-        #         robot.out_of_bounds = True
-        #     #robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
-
-
-        # if len(self.zones[0].de_jure_robots) == 0:
-        #     newzones = []
-        #     zone_role = 0
-        #     for zone in self.zones:
-        #         zone.de_jure_robots = []
-        #         self.robots = zone.buildDeJure(self.robots, Role(zone_role))
-        #         newzones.append(zone)
-        #         zone_role += 1
-        #     self.zones = newzones
-
         if self.timer.status != TimerStatus.PAUSED and self.timer.status != TimerStatus.COMPLETE:
             if self.blue_goal.check(self.ball) or self.red_goal.check(self.ball):
                 self.timer.pause()
                 self.gameState = 1
                 self.reset_zone = Zone((self.max_x - self.min_x)/2 - 75 + self.min_x, (self.max_y - self.min_y)/2 + self.min_y - 75, 150, 150)
-        if self.timer.status == TimerStatus.PAUSED and self.gameState == 1:
+        if (self.timer.status == TimerStatus.PAUSED or self.timer.status == TimerStatus.STOPPED) and self.gameState == 1:
             cv2.rectangle(image, (int(self.reset_zone.x1), int(self.reset_zone.y1)),
                           (int(self.reset_zone.x2), int(self.reset_zone.y2)),
                           green, 2, lineType=cv2.LINE_AA)
