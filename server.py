@@ -62,8 +62,8 @@ class Robot:
         self.out_of_bounds = False
         self.distance = None
         self.ball_dist = None
-        self.team = None
-        self.role = None
+        self.team = Team.UNASSIGNED
+        self.role = Role.NOMAD
 
 
 class Ball:
@@ -624,7 +624,8 @@ class Tracker(threading.Thread):
                     break
             else:
                 text2 = ""
-            text = str(tag.id)
+            #text = str(tag.id)
+            text = robot.role.name
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 1.5
             thickness = 4

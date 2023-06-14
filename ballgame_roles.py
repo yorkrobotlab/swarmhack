@@ -9,3 +9,4 @@ class Role(Enum):
 class Team(Enum):
     RED = 0
     BLUE = 1
+    UNASSIGNED = 2
