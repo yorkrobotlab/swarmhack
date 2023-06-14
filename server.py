@@ -12,7 +12,6 @@ import itertools
 import random
 import angles
 import time
-from enum import Enum
 from math import sqrt
 from ballgame_roles import *
 
@@ -125,11 +124,22 @@ class Zone:
             return True
         return False
 
-    def buildDeJure(self, robots):
-        newrobots = {}
+    def buildDeJure(self, robots, red_role):
         for id, robot in robots.items():
             if self.x1 <= robot.tag.centre.x <= self.x2:
                 self.de_jure_robots.append(id)
+                if (robot.team == Team.RED):
+                    robot.role = red_role
+                elif (robot.team == Team.BLUE):
+                    if (red_role == Role.STRIKER):
+                        robot.role = Role.DEFENDER
+                    elif (red_role == Role.DEFENDER):
+                        robot.role = Role.STRIKER
+                    else:
+                        robot.role = Role.MID_FIELD
+                else:
+                    robot.role = Role.NOMAD
+                robots[id] = robot
     def getZone(self):
         return (self.x1, self.x2)
 
@@ -150,7 +160,6 @@ class Zone:
         for id, robot in robots.items():
             if self.x1 <= robot.tag.centre.x <= self.x2:
                 robot.team = team
-            print(id, robot.team)
         return robots
 
 
@@ -168,8 +177,6 @@ class Goal:
     def check(self, ball):
         ball_x = ball.tag.centre.x
         ball_y = ball.tag.centre.y
-
-        # print(f"ball_x: {ball_x}, \n ball_y: {ball_y}, \n (x1, x2): {self.x1, self.x2}, \n (y1, y2): {self.y1, self.y2}")
 
         if (ball_x - ball.radius) > self.x1 and \
                 (ball_x + ball.radius) < self.x2 and \
@@ -304,18 +311,20 @@ class Tracker(threading.Thread):
                 for zone in self.zones:
                     print(zone.rule_breakers, zone.x1, zone.x2)
                     print(zone.de_jure_robots)
+                    for id, robot in self.robots.items():
+                        print(id, robot.role)
             if key.char == 'b':
                 newzones = []
+                zone_role = 0
                 for zone in self.zones:
                     zone.de_jure_robots = []
-                    zone.buildDeJure(self.robots)
+                    zone.buildDeJure(self.robots, zone_role)
+                    zone_role += 1
                     newzones.append(zone)
                 self.zones = newzones
             if key.char == 'a':
                 self.robots = self.zones[0].assignTeam(self.robots, Team.RED)
                 self.robots = self.zones[len(self.zones)-1].assignTeam(self.robots, Team.BLUE)
-                for id, robot in self.robots.items():
-                    print(robot.team)
             if key.char == '[':
                 self.blue_goal.score -= 1
             elif key.char == ']':
@@ -621,7 +630,6 @@ class Tracker(threading.Thread):
             textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
             position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2 - 3))
             cv2.putText(image, text2, position, font, font_scale * 3, red, thickness * 4, cv2.LINE_AA)
-            print(robot.team)
             if robot.team == Team.RED:
                 teamcolor = red
             elif robot.team == Team.BLUE:
@@ -665,10 +673,12 @@ class Tracker(threading.Thread):
 
         if len(self.zones[0].de_jure_robots) == 0:
             newzones = []
+            zone_role = 0
             for zone in self.zones:
                 zone.de_jure_robots = []
-                zone.buildDeJure(self.robots)
+                zone.buildDeJure(self.robots, zone_role)
                 newzones.append(zone)
+                zone_role += 1
             self.zones = newzones
 
         if self.timer.status != TimerStatus.PAUSED and self.timer.status != TimerStatus.COMPLETE:
