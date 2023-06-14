@@ -34,13 +34,12 @@ function should be declared with "async" (see the simple_obstacle_avoidance() ex
 main_loop() using loop.run_until_complete(async_thing_to_run(ids))
 """
 
-active_robots = {}
-ids = []
-robot_ids = [34, 37, 39]
+robot_ids = [31, 32, 38]
 
 def main_loop():
-    # This line requests all robot virtual sensor data from the tracking server for the robots specified in robot_ids
-    # This is stored in active_robots, a map of id -> instances of the Robot class (defined lower in this file) 
+    # This requests all robot virtual sensor data from the tracking server for the robots specified in robot_ids
+    # This is stored in the global variable active_robots, a map of id -> instances of the Robot class (defined lower in this file) 
+    # Look down in send_commands() to see how this is used.
     print(Fore.GREEN + "[INFO]: Requesting data from tracking server")
     loop.run_until_complete(get_server_data())
 
@@ -60,11 +59,35 @@ def main_loop():
     # Sleep until next control cycle. We use 0.1 seconds by default so as to not flood the network.
     time.sleep(0.1)
 
+
+
 """
 This is an example of a behaviour. You will want to replace this with a behaviour that implements your team
 movements. It currently is an example of basic object avoidance.
+This function is called for each robot that we listed in robot_ids that we are interested in.
 """
 async def send_commands(robot):
+    print(f"Commanding robot {robot.id}: Team {robot.team}, Role {robot.role}, Orientation {robot.orientation}")
+
+    """
+    robot.neighbours is a map of all the other robots (i.e. not this one) 
+    with their role, team, range from this robot, and bearing from this robot
+    For example:
+    { '33': { 'bearing': -178.98,
+              'orientation': -16.26,
+              'range': 1.14,
+              'role': 'NOMAD',
+              'team': 'UNASSIGNED'},
+      '34': { 'bearing': 177.24,
+              'orientation': -25.56,
+              'range': 1.47,
+              'role': 'DEFENDER',
+              'team': 'BLUE'},
+
+    Print it with pprint.PrettyPrinter(indent=2).pprint(robot.neighbours)
+
+    """
+
     try:
         # Turn off LEDs and motors when killed. Please remember to do this!
         if kill_now():
@@ -79,7 +102,7 @@ async def send_commands(robot):
         Construct a command message
         Robots are controlled by sending them a json dictionary which we create here using the message variable
         
-        We can set the speed of the wheel motors (from -255 to 255). Setting them to the same value makes the robot go forwards
+        We can set the speed of the wheel motors (from -100 to 100). Setting them to the same value makes the robot go forwards
         or backwards. Setting them differently makes the robot turn. For example:
         message["set_motor_speeds"]["left"] = 100
         message["set_motor_speeds"]["right"] = 100
@@ -91,13 +114,14 @@ async def send_commands(robot):
 
         The rest of this function is an example object avoidance behaviour which goes FORWARD unless the IR sensor
         detects something in front of it, when it will turn instead.
+        It also every 5 seconds attempts to regroup the robots.
         """
         if robot.state == RobotState.FORWARDS:
             left = right = robot.MAX_SPEED
-            if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
+            if (time.time() - robot.turn_time > 0.5) and any(ir > 80 for ir in robot.ir_readings):
                 robot.turn_time = time.time()
                 robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
-            elif (time.time() - robot.regroup_time > 5):
+            elif (time.time() - robot.regroup_time > 5): # Every 5 seconds, go into the "regroup" state
                 robot.regroup_time = time.time()
                 robot.state = RobotState.REGROUP
 
@@ -109,7 +133,7 @@ async def send_commands(robot):
         elif robot.state == RobotState.LEFT:
             left = -robot.MAX_SPEED
             right = robot.MAX_SPEED
-            if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
+            if time.time() - robot.turn_time > random.uniform(0.5, 1.0): # Set a value in the Robot class to turn for an amount of time between 0.5secs and 1sec
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
 
@@ -125,21 +149,35 @@ async def send_commands(robot):
             robot.turn_time = time.time()
             robot.state = RobotState.FORWARDS
 
+        
+        #In the regroup state, try to group back together
+        #This is an example of using the robot.neighbours map to set our target direction based on where other robots are.
+        #It will get vectors to all other robots, average the direction, and so move the "middle" of the swarm
+        
         elif robot.state == RobotState.REGROUP:
             message["set_leds_colour"] = "green"
-            direction = Vector2D(0, 0)
-            for neighbour_id, neighbour in robot.neighbours.items():
-                direction += Vector2D(neighbour["range"] * math.cos(math.radians(neighbour["bearing"])),
-                                      neighbour["range"] * math.sin(math.radians(neighbour["bearing"])))
-            direction_polar = direction.to_polar()
+
+            target_direction = Vector2D(0, 0) #Create a zero vector to work with
+            for neighbour_id, neighbour in robot.neighbours.items(): #For every other robot (you probably want to filter this by team/role)
+                
+                vector_to_neighbour = Vector2D(neighbour["range"] * math.cos(math.radians(neighbour["bearing"])),
+                                               neighbour["range"] * math.sin(math.radians(neighbour["bearing"])))
+
+                target_direction += vector_to_neighbour #Add up all the neighbour vectors
+            target_direction /= len(robot.neighbours) #Average them
+
+            direction_polar = target_direction.to_polar() #By getting a polar vector, we get the target bearing
+            #But that bearing is in radians, so we convert to degrees that are normalised to between 180 and -180, like this:
             heading = angles.normalize(math.degrees(direction_polar[1]), -180, 180)
+
+            #Turn left or right based on the resulting angle
             if heading > 0:
                 left = robot.MAX_SPEED
                 right = 0
             else:
                 left = 0
                 right = robot.MAX_SPEED
-            if time.time() - robot.regroup_time > random.uniform(3.0, 4.0):
+            if time.time() - robot.regroup_time > random.uniform(3.0, 4.0): #Back into the FORWARDS state after a delay
                 message["set_leds_colour"] = "red"
                 robot.state = RobotState.FORWARDS
 
@@ -151,8 +189,63 @@ async def send_commands(robot):
         await robot.connection.send(json.dumps(message))
 
     except Exception as e:
-        print(f"{type(e).__name__}: {e}")
+        print(f"send_commands: {type(e).__name__}: {e}")
 
+
+
+
+# Robot class and structures
+#----------------------------
+
+# Robot states to use in the example controller. Feel free to change.
+class RobotState(Enum):
+    FORWARDS = 1
+    BACKWARDS = 2
+    LEFT = 3
+    RIGHT = 4
+    STOP = 5
+    REGROUP = 6
+
+# Main Robot class to keep track of robot states
+class Robot:
+    # Firmware on both robots accepts wheel velocities between -100 and 100.
+    # This limits the controller to fit within that.
+    MAX_SPEED = 100
+
+    def __init__(self, robot_id):
+        self.id = robot_id
+        self.connection = None
+        self.tasks = {}
+
+        self.orientation = 0 # Our orientation from "up". 0 to 359
+        self.neighbours = {} # All other robots in the area (see format, above)
+        self.role = 'NOMAD' # Will be NOMAD, DEFENDER, MID_FIELD, STRIKER
+        self.team = 'UNASSIGNED' # Will be UNASSIGNED, RED, BLUE
+        self.remaining_time = 0 # Number of seconds left in the match
+        self.bearing_to_ball = 0
+        self.distance_to_ball = 0
+        #Value between 0 and 1 for your x coordinate in your assigned zone. If < 0 or > 1 you are out of your zone. 1 means furthest from your goal.
+        self.progress_through_zone = 0 
+
+        self.ir_readings = []
+        self.battery_charging = False
+        self.battery_voltage = 0
+        self.battery_percentage = 0
+
+        # These are used by the example behaviour. Feel free to change.
+        self.state = RobotState.STOP
+        self.turn_time = time.time()
+        self.regroup_time = time.time()
+
+
+
+#------------------------------------------------------
+# You probably don't need to change anything below here
+#------------------------------------------------------
+
+
+active_robots = {} 
+ids = []
 
 
 # Server address, port details, globals
@@ -188,52 +281,6 @@ signal.signal(signal.SIGTERM, __set_kill_now)
 def kill_now() -> bool:
     global __kill_now
     return __kill_now
-
-
-# Robot class and structures
-#----------------------------
-
-# Robot states to use in the example controller
-class RobotState(Enum):
-    FORWARDS = 1
-    BACKWARDS = 2
-    LEFT = 3
-    RIGHT = 4
-    STOP = 5
-    REGROUP = 6
-
-# Main Robot class to keep track of robot states
-class Robot:
-
-    # 3.6V should give an indication that the battery is getting low, but this value can be experimented with.
-    # Battery percentage might be a better
-    BAT_LOW_VOLTAGE = 3.6
-
-    # Firmware on both robots accepts wheel velocities between -100 and 100.
-    # This limits the controller to fit within that.
-    MAX_SPEED = 100
-
-    def __init__(self, robot_id):
-        self.id = robot_id
-        self.connection = None
-
-        self.orientation = 0
-        self.neighbours = {}
-        self.tasks = {}
-
-        self.state = RobotState.STOP
-        self.ir_readings = []
-        self.battery_charging = False
-        self.battery_voltage = 0
-        self.battery_percentage = 0
-
-        self.turn_time = time.time()
-        self.regroup_time = time.time()
-
-        # Pi-puck IR is more sensitive than Mona, so use higher threshold for obstacle detection
-
-        # Mona
-        self.ir_threshold = 80
 
 
 # Connect to websocket server of tracking server
@@ -326,8 +373,6 @@ async def message_robots(ids, function):
 async def get_server_data():
     try:
         global ids
-        # global ball
-        # message = {"get_robots": True, "get_ball": True}
         message = {"get_robots": True}
 
         # Send request for data and wait for reply
@@ -335,32 +380,30 @@ async def get_server_data():
         reply_json = await server_connection.recv()
         reply = json.loads(reply_json)
 
-        pprint.PrettyPrinter(indent=4).pprint(reply)
-
-        # ball.position = reply["ball"]["position"]
-        # print(ball.position)
-        # del reply['ball']
-
         # Filter reply from the server, based on our active robots of interest
         filtered_reply = {int(k): v for (k, v) in reply.items() if int(k) in active_robots.keys()}
-
         ids = list(filtered_reply.keys())
+
+        pprint.PrettyPrinter(indent=4).pprint(reply)
+        #print(f"active_robots.keys() = {active_robots.keys()}")
+        #print(f"filtered_reply = {filtered_reply}")
+        #print(f"ids = {ids}")
 
         # Receive robot virtual sensor data from the server
         for id, robot in filtered_reply.items():
+            #print(f"Updating robot {id}")
             active_robots[id].orientation = robot["orientation"]
-            # Filter out any neighbours that aren't our active robots
-            active_robots[id].neighbours = {k: v for (k, v) in robot["neighbours"].items() if int(k) in active_robots.keys()}
-            active_robots[id].tasks = robot["tasks"]
-            print(f"Robot {id}")
-            print(f"Orientation = {active_robots[id].orientation}")
-            print(f"Neighbours = {active_robots[id].neighbours}")
-            print(f"Tasks = {active_robots[id].tasks}")
-            print()
-
+            active_robots[id].role = robot["role"]
+            active_robots[id].team = robot["team"]
+            active_robots[id].remaining_time = robot["remaining_time"]
+            active_robots[id].neighbours = robot["players"]
+            active_robots[id].bearing_to_ball = robot["ball"]["bearing"]
+            active_robots[id].distance_to_ball = robot["ball"]["range"]   
+            active_robots[id].progress_through_zone = robot["progress_through_zone"]   
+              
 
     except Exception as e:
-        print(f"{type(e).__name__}: {e}")
+        print(f"get_server_data: {type(e).__name__}: {e}")
 
 
 # Stop robot from moving and turn off its LEDs
@@ -389,14 +432,8 @@ async def get_data(robot):
         reply = json.loads(reply_json)
 
         robot.ir_readings = reply["ir"]
-
         robot.battery_voltage = reply["battery"]["voltage"]
         robot.battery_percentage = reply["battery"]["percentage"]
-
-        print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
-        print("[Robot {}] Battery: {:.2f}V, {}%" .format(robot.id,
-                                                         robot.battery_voltage,
-                                                         robot.battery_percentage))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
