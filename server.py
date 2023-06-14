@@ -26,6 +26,8 @@ black = (0, 0, 0)
 white = (255, 255, 255)
 grey = (100, 100, 100)
 
+PUCK_ID = 1
+
 class Tag:
     def __init__(self, id, raw_tag):
         self.id = id
@@ -64,34 +66,15 @@ class Robot:
         self.ball_dist = None
         self.team = Team.UNASSIGNED
         self.role = Role.NOMAD
+        self.ball = None
 
 
 class Ball:
-    def __init__(self, position):
+    def __init__(self, position, tag):
         self.position = position
         self.radius = 30
-        self.id = 1
-
-    def getPosition(self, scale_factor):
-        position = (self.position.x / scale_factor, self.position.y / scale_factor)
-        return position
-
-    def getDistanceFromRobot(self, robot, scale_factor):
-        x_diff = self.getPosition(scale_factor)[0] - robot.position.x
-        y_diff = self.getPosition(scale_factor)[1] - robot.position.y
-
-        sq_dist = x_diff ** 2 + y_diff ** 2
-
-        return sqrt(sq_dist)
-
-    def getBearingFromRobot(self, robot, scale_factor):
-
-        absolute_bearing = math.degrees(
-            math.atan2(self.getPosition(scale_factor)[1] - robot.position.y, self.getPosition(scale_factor)[0] - robot.position.x))
-        relative_bearing = absolute_bearing - robot.orientation
-        normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-        return normalised_bearing
-
+        self.tag = tag
+        self.id = PUCK_ID
 
 class Zone:
     """
@@ -275,10 +258,9 @@ class Tracker(threading.Thread):
         self.scale_factor = 0
         self.robots = {}
 
-
         self.red_score = 0
         self.blue_score = 0
-        self.ball = Ball((0, 0))
+        self.ball = None
         self.zones = []
         self.gameState = 0
         self.timer = Timer(1000)
@@ -412,9 +394,8 @@ class Tracker(threading.Thread):
     tag -- a tag of ID=0
     """
     def calibrate(self, tag):
-        if tag.id == self.ball.id:
-            self.ball.position = None
-            self.ball.tag = tag
+        if tag.id == PUCK_ID:
+            self.ball = Ball(Vector2D(0, 0), tag)
 
         if tag.id == 0:  # Reserved tag ID for corners
 
@@ -470,6 +451,13 @@ class Tracker(threading.Thread):
                     relative_bearing = absolute_bearing - robot.orientation
                     normalised_bearing = angles.normalize(relative_bearing, -180, 180)
                     robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
+
+            range = robot.position.distance_to(self.ball.position)
+            absolute_bearing = math.degrees(math.atan2(self.ball.position.y - robot.position.y,
+                                                       self.ball.position.x - robot.position.x))
+            relative_bearing = absolute_bearing - robot.orientation
+            normalised_bearing = angles.normalize(relative_bearing, -180, 180)
+            robot.ball = SensorReading(range, normalised_bearing)
 
     """
     Draws bounding box of the arena.
@@ -702,10 +690,14 @@ async def handler(websocket):
 
                     reply[id] = {}
                     reply[id]["orientation"] = robot.orientation
+                    reply[id]["role"] = robot.role.name
+                    reply[id]["team"] = robot.team.name
                     reply[id]["players"] = {}
                     reply[id]["remaining_time"] = int(tracker.timer.time_left)
                     #reply[id]["dist_from_zone_edges"] = robot.distance
-                    #reply[id]["ball"] = robot.ball_dist  # distance, bearing
+                    reply[id]["ball"] = {}
+                    reply[id]["ball"]["range"] = robot.ball.range
+                    reply[id]["ball"]["bearing"] = robot.ball.bearing
 
                     for neighbour_id, neighbour in robot.neighbours.items():
                         neighbour_robot = tracker.robots[neighbour_id]
