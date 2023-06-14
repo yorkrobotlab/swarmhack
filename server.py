@@ -506,11 +506,14 @@ class Tracker(threading.Thread):
                 text2 = ""
             #text = str(tag.id)
             text = robot.role.name
+            text3 = str(robot.id)
+
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 1.5
             thickness = 4
             textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
             position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2 - 3))
+            position2 = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2 - 2 * textsize[1]))
             cv2.putText(image, text2, position, font, font_scale * 3, red, thickness * 4, cv2.LINE_AA)
             if robot.team == Team.RED:
                 teamcolor = red
@@ -521,6 +524,9 @@ class Tracker(threading.Thread):
 
             cv2.putText(image, text, position, font, font_scale, teamcolor, thickness * 3, cv2.LINE_AA)
             cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
+
+            cv2.putText(image, text3, position2, font, font_scale, teamcolor, thickness * 3, cv2.LINE_AA)
+            cv2.putText(image, text3, position2, font, font_scale, white, thickness, cv2.LINE_AA)
 
 
 
