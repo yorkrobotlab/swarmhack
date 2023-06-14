@@ -58,7 +58,7 @@ class Robot:
         self.orientation = tag.angle
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
-        self.tasks = {}
+
         self.out_of_bounds = False
         self.distance = None
         self.ball_dist = None
@@ -254,17 +254,7 @@ class Timer:
             seconds = "0" + seconds
         time_string = str(minutes) + ":" + seconds
         return time_string
-class Task:
-    def __init__(self, id, workers, position, radius, time_limit):
-        self.id = id
-        self.workers = workers
-        self.position = position
-        self.radius = radius
-        self.time_limit = time_limit
-        self.counter = time_limit
-        self.completed = False
-        self.failed = False
-        self.start_time = time.time()
+
 
 class Tracker(threading.Thread):
 
@@ -284,8 +274,8 @@ class Tracker(threading.Thread):
         self.corner_distance_pixels = 0
         self.scale_factor = 0
         self.robots = {}
-        self.tasks = {}
-        self.task_counter = 0
+
+
         self.red_score = 0
         self.blue_score = 0
         self.ball = Ball((0, 0))
@@ -366,6 +356,7 @@ class Tracker(threading.Thread):
                         self.robots[id].tag = tag
                     else:
                         self.robots[id] = Robot(tag, position)
+
             else:  # Only calibrate the first time two corner tags are detected
                 self.calibrate(tag)
     """
@@ -479,105 +470,6 @@ class Tracker(threading.Thread):
                     relative_bearing = absolute_bearing - robot.orientation
                     normalised_bearing = angles.normalize(relative_bearing, -180, 180)
                     robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
-
-    """
-    Code for processing old task-based game
-    
-    image -- Camera image for task elements to be drawn onto
-    overlay -- ????
-    """
-    def processTasks(self, image, overlay):
-        while len(self.tasks) < 3:
-            id = self.task_counter
-            placed = False
-            while not placed:
-                overlaps = False
-                workers = random.randint(1, 5)
-                radius = math.sqrt(workers) * 0.1
-                min_x_metres = self.min_x / self.scale_factor
-                max_x_metres = self.max_x / self.scale_factor
-                min_y_metres = self.min_y / self.scale_factor
-                max_y_metres = self.max_y / self.scale_factor
-                x = random.uniform(min_x_metres + radius, max_x_metres - radius)
-                y = random.uniform(min_y_metres + radius, max_y_metres - radius)
-                position = Vector2D(x, y)  # In metres
-
-                for other_task in self.tasks.values():
-                    overlap = radius + other_task.radius
-                    if position.distance_to(other_task.position) < overlap:
-                        overlaps = True
-
-                if not overlaps:
-                    placed = True
-
-            time_limit = 20 * workers  # 20 seconds per robot
-            self.tasks[id] = Task(id, workers, position, radius, time_limit)
-            self.task_counter = self.task_counter + 1
-
-        # Iterate over tasks
-        for task_id, task in self.tasks.items():
-
-            task.robots = []
-
-            # Check whether robot is within range
-            for robot_id, robot in self.robots.items():
-                distance = task.position.distance_to(robot.position)
-
-                if distance < robot.sensor_range:
-                    absolute_bearing = math.degrees(
-                        math.atan2(task.position.y - robot.position.y, task.position.x - robot.position.x))
-                    relative_bearing = absolute_bearing - robot.orientation
-                    normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-
-                    robot.tasks[task_id] = SensorReading(distance, normalised_bearing, workers=task.workers)
-
-                if distance < task.radius:
-                    task.robots.append(robot_id)
-
-            # print(f"Task {task_id} - workers: {task.workers}, robots: {task.robots}")
-
-            if len(task.robots) >= task.workers:
-                task.completed = True
-
-            pixel_radius = int(task.radius * self.scale_factor)
-            x = int(task.position.x * self.scale_factor)
-            y = int(task.position.y * self.scale_factor)
-
-            # Draw task timer
-            time_now = time.time()
-            task.elapsed_time = time_now - task.start_time
-            if task.elapsed_time > 1:
-                task.start_time = time_now
-                task.counter = task.counter - 1
-                if task.counter <= 1:
-                    task.failed = True
-            cv2.circle(overlay, (x, y), int((pixel_radius / task.time_limit) * task.counter), cyan, -1,
-                       lineType=cv2.LINE_AA)
-
-            colour = red
-
-            # Draw task boundary
-            cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
-            cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
-
-            # Draw task ID
-            text = str(task.workers)
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1.5
-            thickness = 4
-            textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-            position = (int(x - textsize[0] / 2), int(y + textsize[1] / 2))
-            cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-            cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
-
-        # Delete completed tasks
-        for task_id in list(self.tasks.keys()):
-            task = self.tasks[task_id]
-            if task.completed:
-                self.score = self.score + task.workers
-                del self.tasks[task_id]
-            elif task.failed:
-                del self.tasks[task_id]
 
     """
     Draws bounding box of the arena.
@@ -754,7 +646,6 @@ class Tracker(threading.Thread):
                 self.drawBall(image)
                 self.drawZones(image)
                 self.drawGoals(image)
-                # self.processTasks(image, overlay)
                 self.timer.update()
 
                 self.processGame(image)
@@ -812,7 +703,6 @@ async def handler(websocket):
                     reply[id] = {}
                     reply[id]["orientation"] = robot.orientation
                     reply[id]["players"] = {}
-                    reply[id]["tasks"] = {}
                     reply[id]["remaining_time"] = int(tracker.timer.time_left)
                     #reply[id]["dist_from_zone_edges"] = robot.distance
                     #reply[id]["ball"] = robot.ball_dist  # distance, bearing
@@ -824,12 +714,6 @@ async def handler(websocket):
                         reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["range"] = neighbour.range
                         reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["bearing"] = neighbour.bearing
                         reply[id]["players"][neighbour_robot.team.name][neighbour_robot.role.name]["orientation"] = neighbour.orientation
-
-                    for task_id, task in robot.tasks.items():
-                        reply[id]["tasks"][task_id] = {}
-                        reply[id]["tasks"][task_id]["range"] = task.range
-                        reply[id]["tasks"][task_id]["bearing"] = task.bearing
-                        reply[id]["tasks"][task_id]["workers"] = task.workers
 
 
             # Send reply, if requested
