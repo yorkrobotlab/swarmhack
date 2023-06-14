@@ -655,8 +655,8 @@ class Tracker(threading.Thread):
                 cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                 cv2.putText(image, text, position, font, font_scale, self.timer.getColor(), thickness, cv2.LINE_AA)
 
-                cv2.putText(image, blu_sc, (self.blue_goal.x2, 1000), font, font_scale * 2, blue, thickness * 3, cv2.LINE_AA)
-                cv2.putText(image, red_sc, (self.red_goal.x1 - 80, 1000), font, font_scale * 2, red, thickness * 3, cv2.LINE_AA)
+                cv2.putText(image, blu_sc, (self.blue_goal.x2 - 40, 1000), font, font_scale * 2, blue, thickness * 3, cv2.LINE_AA)
+                cv2.putText(image, red_sc, (self.red_goal.x1 - 40, 1000), font, font_scale * 2, red, thickness * 3, cv2.LINE_AA)
 
                 # Transparency for overlaid augments
                 alpha = 0.3
