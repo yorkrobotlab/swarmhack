@@ -63,7 +63,7 @@ class Robot:
         self.neighbours = {}
 
         self.out_of_bounds = False
-        self.distance = None
+        self.distance = 0
         self.ball_dist = None
         self.team = Team.UNASSIGNED
         self.role = Role.NOMAD
@@ -94,6 +94,9 @@ class Zone:
 
         self.y1 = y
         self.y2 = y + height
+
+        self.width = width
+        self.height = height
 
     def addDeJure(self, robot):
         self.de_jure_robots.append(robot)
@@ -472,6 +475,15 @@ class Tracker(threading.Thread):
             normalised_bearing = angles.normalize(relative_bearing, -180, 180)
             robot.ball = SensorReading(range, normalised_bearing)
 
+            for zone in self.zones:
+                if id in zone.de_jure_robots:
+                    robot.distance = (robot.tag.centre.x - zone.x1) / zone.width
+                    robot.out_of_bounds = False
+                    break
+            else:
+                robot.distance = 0  # this is not special its just here to hopefully avoid future errors
+                robot.out_of_bounds = True
+
     """
     Draws bounding box of the arena.
     
@@ -519,7 +531,7 @@ class Tracker(threading.Thread):
                 text2 = ""
             #text = str(tag.id)
             text = robot.role.name
-            text3 = str(robot.id)
+            text3 = str(round(robot.distance, 2))
 
             font = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = 1.5
@@ -563,16 +575,17 @@ class Tracker(threading.Thread):
             zone.checkRobots(self.robots)
             newzones.append(zone)
         self.zones = newzones
-        for id, robot in self.robots.items():
-            for zone in self.zones:
-                if id in zone.de_jure_robots:
-                    robot.distance = ((zone.x1 - robot.tag.centre.x) / self.scale_factor, (zone.x2 - robot.tag.centre.x) / self.scale_factor)
-                    robot.out_of_bounds = False
-                    break
-            else:
-                robot.distance = None  # this is not special its just here to hopefully avoid future errors
-                robot.out_of_bounds = True
-            #robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
+
+        # for id, robot in self.robots.items():
+        #     for zone in self.zones:
+        #         if id in zone.de_jure_robots:
+        #             robot.distance = ((zone.x1 - robot.tag.centre.x) / self.scale_factor, (zone.x2 - robot.tag.centre.x) / self.scale_factor)
+        #             robot.out_of_bounds = False
+        #             break
+        #     else:
+        #         robot.distance = None  # this is not special its just here to hopefully avoid future errors
+        #         robot.out_of_bounds = True
+        #     #robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
 
 
         if len(self.zones[0].de_jure_robots) == 0:
@@ -722,7 +735,7 @@ async def handler(websocket):
                     reply[id]["team"] = robot.team.name
                     reply[id]["players"] = {}
                     reply[id]["remaining_time"] = int(tracker.timer.time_left)
-                    #reply[id]["dist_from_zone_edges"] = robot.distance
+                    reply[id]["dist_from_zone_edges"] = robot.distance
                     reply[id]["ball"] = {}
                     reply[id]["ball"]["range"] = robot.ball.range
                     reply[id]["ball"]["bearing"] = robot.ball.bearing
