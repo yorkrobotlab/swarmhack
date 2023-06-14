@@ -71,7 +71,7 @@ class Ball:
     def __init__(self, position):
         self.position = position
         self.radius = 30
-        self.id = 6
+        self.id = 1
 
     def getPosition(self, scale_factor):
         position = (self.position.x / scale_factor, self.position.y / scale_factor)
@@ -350,8 +350,12 @@ class Tracker(threading.Thread):
                 if (tag.id not in [0, self.ball.id]):  # Reserved tag ID for corners and for ball
                     position = Vector2D(tag.centre.x / self.scale_factor,
                                         tag.centre.y / self.scale_factor)  # Convert pixel coordinates to metres
-
-                    self.robots[id] = Robot(tag, position)
+                    if (tag.id in self.robots.keys()):
+                        self.robots[tag.id].position = position
+                        self.robots[id].orientation = tag.angle
+                        self.robots[id].tag = tag
+                    else:
+                        self.robots[id] = Robot(tag, position)
             else:  # Only calibrate the first time two corner tags are detected
                 self.calibrate(tag)
     """
@@ -656,7 +660,7 @@ class Tracker(threading.Thread):
             else:
                 robot.distance = None  # this is not special its just here to hopefully avoid future errors
                 robot.out_of_bounds = True
-            robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
+            #robot.ball_dist = (self.ball.getDistanceFromRobot(robot, self.scale_factor), self.ball.getBearingFromRobot(robot, self.scale_factor))
 
 
         if len(self.zones[0].de_jure_robots) == 0:
@@ -717,7 +721,7 @@ class Tracker(threading.Thread):
 
             (raw_tags, tag_ids, rejected) = cv2.aruco.detectMarkers(image, aruco_dictionary, parameters=aruco_parameters)
 
-            self.robots = {} # Clear dictionary every frame in case robots have disappeared
+            # self.robots = {} # Clear dictionary every frame in case robots have disappeared
 
             # Check whether any tags were detected in this camera frame
             if tag_ids is not None and len(tag_ids.tolist()) > 0:
@@ -784,39 +788,39 @@ async def handler(websocket):
         # Process any requests received
         reply = {}
         send_reply = False
+        if tracker.calibrated:
+            if "check_awake" in message:
+                reply["awake"] = True
+                send_reply = True
 
-        if "check_awake" in message:
-            reply["awake"] = True
-            send_reply = True
+            if "get_robots" in message:
+                send_reply = True
+                for id, robot in tracker.robots.items():
 
-        if "get_robots" in message:
-            send_reply = True
-            for id, robot in tracker.robots.items():
+                    reply[id] = {}
+                    reply[id]["orientation"] = robot.orientation
+                    reply[id]["neighbours"] = {}
+                    reply[id]["tasks"] = {}
+                    reply[id]["remaining_time"] = int(tracker.timer.time_left)
+                    #reply[id]["dist_from_zone_edges"] = robot.distance
+                    #reply[id]["ball"] = robot.ball_dist  # distance, bearing
 
-                reply[id] = {}
-                reply[id]["orientation"] = robot.orientation
-                reply[id]["neighbours"] = {}
-                reply[id]["tasks"] = {}
-                reply[id]["remaining_time"] = int(tracker.timer.time_left)
-                reply[id]["dist_from_zone_edges"] = robot.distance
-                reply[id]["ball"] = robot.ball_dist  # distance, bearing
+                    for neighbour_id, neighbour in robot.neighbours.items():
+                        reply[id]["neighbours"][neighbour_id] = {}
+                        reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
+                        reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
+                        reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
 
-                for neighbour_id, neighbour in robot.neighbours.items():
-                    reply[id]["neighbours"][neighbour_id] = {}
-                    reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
-                    reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
-                    reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
-
-                for task_id, task in robot.tasks.items():
-                    reply[id]["tasks"][task_id] = {}
-                    reply[id]["tasks"][task_id]["range"] = task.range
-                    reply[id]["tasks"][task_id]["bearing"] = task.bearing
-                    reply[id]["tasks"][task_id]["workers"] = task.workers
+                    for task_id, task in robot.tasks.items():
+                        reply[id]["tasks"][task_id] = {}
+                        reply[id]["tasks"][task_id]["range"] = task.range
+                        reply[id]["tasks"][task_id]["bearing"] = task.bearing
+                        reply[id]["tasks"][task_id]["workers"] = task.workers
 
 
-        # Send reply, if requested
-        if send_reply:
-            await websocket.send(json.dumps(reply))
+            # Send reply, if requested
+            if send_reply:
+                await websocket.send(json.dumps(reply))
 
 
 # TODO: Handle Ctrl+C signals
