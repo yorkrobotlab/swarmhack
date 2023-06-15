@@ -27,7 +27,7 @@ white = (255, 255, 255)
 grey = (100, 100, 100)
 
 PUCK_ID = 1
-GAME_TIME = 30
+GAME_TIME = 5 * 60
 # random.seed(1)
 
 class Tag:
@@ -337,6 +337,8 @@ class Tracker(threading.Thread):
                 self.reset_zone = Zone((self.max_x - self.min_x) / 2 - 75 + self.min_x,
                                        (self.max_y - self.min_y) / 2 + self.min_y - 75, 150, 150)
                 self.robots = {}
+                for zone in self.zones:
+                    zone.de_jure_robots = []
 
             if key.char == 'x':
                 for zone in self.zones:
