@@ -130,9 +130,13 @@ class Zone:
             return True
         return False
 
-    def buildDeJure(self, robots, red_role):
+    def buildDeJure(self, robots, red_role, zones):
+        alldejures = []
+        for zone in zones:
+            alldejures += zone.de_jure_robots
+
         for id, robot in robots.items():
-            if self.x1 <= robot.tag.centre.x <= self.x2:
+            if (self.x1 <= robot.tag.centre.x <= self.x2) and id not in alldejures:
                 self.de_jure_robots.append(id)
                 if (robot.team == Team.RED):
                     robot.role = red_role
@@ -319,7 +323,7 @@ class Tracker(threading.Thread):
                 zone_role = 0
                 for zone in self.zones:
                     zone.de_jure_robots = []
-                    self.robots = zone.buildDeJure(self.robots, Role(zone_role))
+                    self.robots = zone.buildDeJure(self.robots, Role(zone_role), newzones)
                     zone_role += 1
                     newzones.append(zone)
                 self.zones = newzones
