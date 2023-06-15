@@ -12,7 +12,6 @@ import itertools
 import random
 import angles
 import time
-from math import sqrt
 from ballgame_roles import *
 
 red = (0, 0, 255)
@@ -69,7 +68,6 @@ class Robot:
         self.team = Team.UNASSIGNED
         self.role = Role.NOMAD
         self.ball = None
-
 
 class Ball:
     def __init__(self, position, tag):
@@ -169,8 +167,6 @@ class Zone:
                 robot.team = team
         return robots
 
-
-
 class Goal:
     def __init__(self, x, y, width, height):
         self.x1 = x
@@ -195,7 +191,6 @@ class Goal:
             return True
         return False
 
-
 class SensorReading:
     def __init__(self, range, bearing, orientation=0, workers=0):
         self.range = range
@@ -203,13 +198,11 @@ class SensorReading:
         self.orientation = orientation
         self.workers = workers
 
-
 class TimerStatus(Enum):
     STOPPED = 0
     STARTED = 1
     PAUSED = 2
     COMPLETE = 3
-
 
 class Timer:
     def __init__(self, time_limit):
@@ -265,7 +258,6 @@ class Timer:
             seconds = "0" + seconds
         time_string = str(minutes) + ":" + seconds
         return time_string
-
 
 class Tracker(threading.Thread):
 
@@ -510,9 +502,10 @@ class Tracker(threading.Thread):
             normalised_bearing = angles.normalize(relative_bearing, -180, 180)
             robot.ball = SensorReading(range, normalised_bearing)
 
-            for zone in self.zones:
-                if id in zone.de_jure_robots:
-                    robot.distance = (robot.tag.centre.x - zone.x1) / zone.width
+            zone_roles = [Role.DEFENDER, Role.MID_FIELD, Role.STRIKER]
+            for zone in range(len(self.zones)-1):
+                if id in self.zones[zone].de_jure_robots and ((self.robots[id].team == Team.RED and self.robots[id].role == zone_roles[zone]) or (self.robots[id].team == Team.BLUE and self.robots[id].role == zone_roles[len(zone_roles) - zone - 1])):
+                    robot.distance = (robot.tag.centre.x - self.zones[zone].x1) / self.zones[zone].width
                     if self.robots[id].team == Team.BLUE:
                         robot.distance = 1 - robot.distance
                     break
@@ -805,7 +798,6 @@ async def handler(websocket):
             # Send reply, if requested
             if send_reply:
                 await websocket.send(json.dumps(reply))
-
 
 # TODO: Handle Ctrl+C signals
 if __name__ == "__main__":
