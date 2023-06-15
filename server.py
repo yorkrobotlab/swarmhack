@@ -298,6 +298,7 @@ class Tracker(threading.Thread):
         self.timer = Timer(GAME_TIME)
         self.roboteams = {}
 
+        self.debug_vectors = {}
 
 
         listener = keyboard.Listener(
@@ -618,6 +619,42 @@ class Tracker(threading.Thread):
             cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3,
                      lineType=cv2.LINE_AA)
 
+            if id in self.debug_vectors.keys():
+                for vector_id, vector in self.debug_vectors[id].items():
+                    colour = vector[0]
+                    x = vector[1]
+                    y = vector[2]
+
+                    # Convert vector from metres to pixel coordinates
+                    x *= self.scale_factor
+                    y *= self.scale_factor
+
+                    # Rotate the vector (defined relative to the robot's own coordinate system) by the robot's absolute orientation
+                    s = math.sin(math.radians(robot.orientation))
+                    c = math.cos(math.radians(robot.orientation))
+
+                    x2 = x * c - y * s
+                    y2 = x * s + y * c
+
+                    # Offset the vector by the robot's coordinates
+                    x2 += tag.centre.x
+                    y2 += tag.centre.y
+
+                    # OpenCV expects integer pixel coordinates
+                    x2 = int(x2)
+                    y2 = int(y2)
+
+                    # Convert colour strings into colours
+                    if colour == "red":
+                        colour = red
+                    elif colour == "blue":
+                        colour = blue
+                    else:
+                        colour = green
+
+                    # cv2.line(image, (tag.centre.x, tag.centre.y), (x, y), colour, 3, lineType=cv2.LINE_AA)
+                    cv2.line(image, (tag.centre.x, tag.centre.y), (x2, y2), colour, 3, lineType=cv2.LINE_AA)
+
 
     def drawBall(self, image):
         cv2.circle(image, (self.ball.tag.centre.x, self.ball.tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
@@ -768,6 +805,12 @@ async def handler(websocket):
         reply = {}
         send_reply = False
         if tracker.calibrated:
+
+            if "vectors" in message:
+                for robot_id, vectors in message["vectors"].items():
+                    tracker.debug_vectors[int(robot_id)] = vectors
+
+
             if "check_awake" in message:
                 reply["awake"] = True
                 send_reply = True
