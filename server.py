@@ -336,6 +336,7 @@ class Tracker(threading.Thread):
                 self.gameState = 1
                 self.reset_zone = Zone((self.max_x - self.min_x) / 2 - 75 + self.min_x,
                                        (self.max_y - self.min_y) / 2 + self.min_y - 75, 150, 150)
+                self.robots = {}
 
             if key.char == 'x':
                 for zone in self.zones:
