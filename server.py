@@ -708,11 +708,12 @@ class Tracker(threading.Thread):
                 self.processRobots()
 
 
-                self.drawBall(image)
+
                 self.drawZones(image)
                 self.drawGoals(image)
-                self.timer.update()
 
+                self.timer.update()
+                self.drawBall(image)
                 self.drawRobots(image)
                 self.processGame(image)
 
