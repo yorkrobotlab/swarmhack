@@ -431,7 +431,7 @@ async def get_server_data():
         filtered_reply = {int(k): v for (k, v) in reply.items() if int(k) in active_robots.keys()}
         ids = list(filtered_reply.keys())
 
-        pprint.PrettyPrinter(indent=4).pprint(reply)
+        #pprint.PrettyPrinter(indent=4).pprint(reply)
         #print(f"active_robots.keys() = {active_robots.keys()}")
         #print(f"filtered_reply = {filtered_reply}")
         #print(f"ids = {ids}")
