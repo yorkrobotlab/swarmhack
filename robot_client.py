@@ -53,6 +53,9 @@ def main_loop():
     print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
     loop.run_until_complete(send_robot_commands(ids))
 
+    print(Fore.GREEN + "[INFO]: Sending data to tracking server")
+    loop.run_until_complete(send_server_commands())
+
     print()
 
     # Sleep until next control cycle. We use 0.1 seconds by default so as to not flood the network.
@@ -122,6 +125,7 @@ async def send_commands(robot):
             elif (time.time() - robot.regroup_time > 5): # Every 5 seconds, go into the "regroup" state
                 robot.regroup_time = time.time()
                 robot.state = RobotState.REGROUP
+            robot.debug_vectors[1] = ["red", 0, 0]
 
         elif robot.state == RobotState.BACKWARDS:
             left = right = -robot.MAX_SPEED
@@ -162,6 +166,8 @@ async def send_commands(robot):
 
                 target_direction += vector_to_neighbour #Add up all the neighbour vectors
             target_direction /= len(robot.neighbours) #Average them
+
+            robot.debug_vectors[1] = ["red", target_direction.x, target_direction.y]
 
             direction_polar = target_direction.to_polar() #By getting a polar vector, we get the target bearing
             #But that bearing is in radians, so we convert to degrees that are normalised to between 180 and -180, like this:
@@ -283,6 +289,8 @@ class Robot:
         self.state = RobotState.STOP
         self.turn_time = time.time()
         self.regroup_time = time.time()
+
+        self.debug_vectors = {}
 
 
 
@@ -457,6 +465,23 @@ async def get_server_data():
         print(f"get_server_data: {type(e).__name__}: {e}")
 
 
+async def send_server_commands():
+    try:
+        message = {"vectors": {}}
+
+        for robot_id, robot in active_robots.items():
+            message["vectors"][robot_id] = {}
+
+            if not kill_now():
+                for vector_id, vector in robot.debug_vectors.items():
+                    message["vectors"][robot_id][vector_id] = [vector[0], round(vector[1], 2), round(vector[2], 2)]
+
+        await server_connection.send(json.dumps(message))
+
+    except Exception as e:
+        print(f"send_server_commands: {type(e).__name__}: {e}")
+
+
 # Stop robot from moving and turn off its LEDs
 async def stop_robot(robot):
     try:
@@ -524,4 +549,5 @@ if __name__ == "__main__":
 
         if kill_now():
             loop.run_until_complete(stop_robots(robot_ids))  # Kill all robots, even if not visible
+            loop.run_until_complete(send_server_commands())
             break
