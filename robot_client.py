@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from robots import robots, server_none, server_york, server_manchester, server_sheffield
+from robots import robots, server_none, server_york
 
 import asyncio
 import websockets
@@ -24,9 +24,9 @@ colorama.init(autoreset=True)
 #  or specify a custom server IP address as a string.
 # All ports should remain at 80.
 ##
-server_address = server_none
-server_port = 80
-robot_port = 80
+server_address = server_york
+server_port = 6000
+robot_port = 6000
 ##
 
 if len(server_address) == 0:
@@ -289,48 +289,49 @@ async def send_commands(robot):
         # Construct command message
         message = {}
 
-        if robot.teleop:
-            # Teleoperation mode
-            message["set_leds_colour"] = "blue"
-            if robot.state == RobotState.FORWARDS:
-                left = right = robot.MAX_SPEED
-            elif robot.state == RobotState.BACKWARDS:
-                left = right = -robot.MAX_SPEED
-            elif robot.state == RobotState.LEFT:
-                left = -robot.MAX_SPEED * 0.8
-                right = robot.MAX_SPEED * 0.8
-            elif robot.state == RobotState.RIGHT:
-                left = robot.MAX_SPEED * 0.8
-                right = -robot.MAX_SPEED * 0.8
-            elif robot.state == RobotState.STOP:
-                left = right = 0
-        else:
-            # Autonomous mode
-            if robot.state == RobotState.FORWARDS:
-                left = right = robot.MAX_SPEED
-                if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
-                    robot.turn_time = time.time()
-                    robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
-            elif robot.state == RobotState.BACKWARDS:
-                left = right = -robot.MAX_SPEED
+        # if robot.teleop:
+        #     # Teleoperation mode
+        #     message["set_leds_colour"] = "blue"
+        #     if robot.state == RobotState.FORWARDS:
+        #         left = right = robot.MAX_SPEED
+        #     elif robot.state == RobotState.BACKWARDS:
+        #         left = right = -robot.MAX_SPEED
+        #     elif robot.state == RobotState.LEFT:
+        #         left = -robot.MAX_SPEED * 0.8
+        #         right = robot.MAX_SPEED * 0.8
+        #     elif robot.state == RobotState.RIGHT:
+        #         left = robot.MAX_SPEED * 0.8
+        #         right = -robot.MAX_SPEED * 0.8
+        #     elif robot.state == RobotState.STOP:
+        #         left = right = 0
+        # else:
+        
+        # Autonomous mode
+        if robot.state == RobotState.FORWARDS:
+            left = right = robot.MAX_SPEED
+            if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
+                robot.turn_time = time.time()
+                robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
+        elif robot.state == RobotState.BACKWARDS:
+            left = right = -robot.MAX_SPEED
+            robot.turn_time = time.time()
+            robot.state = RobotState.FORWARDS
+        elif robot.state == RobotState.LEFT:
+            left = -robot.MAX_SPEED
+            right = robot.MAX_SPEED
+            if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
-            elif robot.state == RobotState.LEFT:
-                left = -robot.MAX_SPEED
-                right = robot.MAX_SPEED
-                if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
-                    robot.turn_time = time.time()
-                    robot.state = RobotState.FORWARDS
-            elif robot.state == RobotState.RIGHT:
-                left = robot.MAX_SPEED
-                right = -robot.MAX_SPEED
-                if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
-                    robot.turn_time = time.time()
-                    robot.state = RobotState.FORWARDS
-            elif robot.state == RobotState.STOP:
-                left = right = 0
+        elif robot.state == RobotState.RIGHT:
+            left = robot.MAX_SPEED
+            right = -robot.MAX_SPEED
+            if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
+        elif robot.state == RobotState.STOP:
+            left = right = 0
+            robot.turn_time = time.time()
+            robot.state = RobotState.FORWARDS
 
         message["set_motor_speeds"] = {}
         message["set_motor_speeds"]["left"] = left
@@ -349,91 +350,91 @@ async def send_commands(robot):
         print(f"{type(e).__name__}: {e}")
 
 
-# Menu state for teleop control input
-class MenuState(Enum):
-    START = 1
-    SELECT = 2
-    DRIVE = 3
+# # Menu state for teleop control input
+# class MenuState(Enum):
+#     START = 1
+#     SELECT = 2
+#     DRIVE = 3
 
 
-# Send message to a websocket server
-async def send_message(websocket, message):
-    await websocket.send(json.dumps({"prompt": message}))
+# # Send message to a websocket server
+# async def send_message(websocket, message):
+#     await websocket.send(json.dumps({"prompt": message}))
 
 
-# Handle message received on the websocket server
-# Used for teleoperation code, which is controlled by running teleop_client.py in a separate terminal.
-async def handler(websocket):
-    state = MenuState.START
-    robot_id = ""
-    valid_robots = list(active_robots.keys())
-    forwards = "w"
-    backwards = "s"
-    left = "a"
-    right = "d"
-    stop = " "
-    release = "q"
+# # Handle message received on the websocket server
+# # Used for teleoperation code, which is controlled by running teleop_client.py in a separate terminal.
+# async def handler(websocket):
+#     state = MenuState.START
+#     robot_id = ""
+#     valid_robots = list(active_robots.keys())
+#     forwards = "w"
+#     backwards = "s"
+#     left = "a"
+#     right = "d"
+#     stop = " "
+#     release = "q"
 
-    async for packet in websocket:
-        message = json.loads(packet)
-        if "key" in message:
-            key = message["key"]
-            if key == "teleop_start":
-                state = MenuState.START
-            elif key == "teleop_stop":
-                if state == MenuState.DRIVE:
-                    id = int(robot_id)
-                    active_robots[id].teleop = False
-                    active_robots[id].state = RobotState.STOP
+#     async for packet in websocket:
+#         message = json.loads(packet)
+#         if "key" in message:
+#             key = message["key"]
+#             if key == "teleop_start":
+#                 state = MenuState.START
+#             elif key == "teleop_stop":
+#                 if state == MenuState.DRIVE:
+#                     id = int(robot_id)
+#                     active_robots[id].teleop = False
+#                     active_robots[id].state = RobotState.STOP
 
-            if state == MenuState.START:
-                await send_message(websocket, f"\r\nEnter robot ID ({valid_robots}), then press return: ")
-                robot_id = ""
-                state = MenuState.SELECT
-            elif state == MenuState.SELECT:
-                if key == "\r":
-                    valid = False
-                    try:
-                        if int(robot_id) in valid_robots:
-                            valid = True
-                            await send_message(websocket, f"\r\nControlling robot ({release} to release): " + robot_id)
-                            await send_message(websocket, f"\r\nControls: Forwards = {forwards}; Backwards = {backwards}; Left = {left}; Right = {right}; Stop = SPACE")
-                            active_robots[int(robot_id)].teleop = True
-                            state = MenuState.DRIVE
-                    except ValueError:
-                        pass
+#             if state == MenuState.START:
+#                 await send_message(websocket, f"\r\nEnter robot ID ({valid_robots}), then press return: ")
+#                 robot_id = ""
+#                 state = MenuState.SELECT
+#             elif state == MenuState.SELECT:
+#                 if key == "\r":
+#                     valid = False
+#                     try:
+#                         if int(robot_id) in valid_robots:
+#                             valid = True
+#                             await send_message(websocket, f"\r\nControlling robot ({release} to release): " + robot_id)
+#                             await send_message(websocket, f"\r\nControls: Forwards = {forwards}; Backwards = {backwards}; Left = {left}; Right = {right}; Stop = SPACE")
+#                             active_robots[int(robot_id)].teleop = True
+#                             state = MenuState.DRIVE
+#                     except ValueError:
+#                         pass
 
-                    if not valid:
-                        await send_message(websocket, "\r\nInvalid robot ID, try again: ")
-                        robot_id = ""
-                        state = MenuState.SELECT
-                else:
-                    await send_message(websocket, key)
-                    robot_id = robot_id + key
-            elif state == MenuState.DRIVE:
-                id = int(robot_id)
-                if key == release:
-                    await send_message(websocket, "\r\nReleasing control of robot: " + robot_id)
-                    active_robots[id].teleop = False
-                    active_robots[id].state = RobotState.STOP
-                    state = MenuState.START
-                elif key == forwards:
-                    await send_message(websocket, "\r\nDriving forwards")
-                    active_robots[id].state = RobotState.FORWARDS
-                elif key == backwards:
-                    await send_message(websocket, "\r\nDriving backwards")
-                    active_robots[id].state = RobotState.BACKWARDS
-                elif key == left:
-                    await send_message(websocket, "\r\nTurning left")
-                    active_robots[id].state = RobotState.LEFT
-                elif key == right:
-                    await send_message(websocket, "\r\nTurning right")
-                    active_robots[id].state = RobotState.RIGHT
-                elif key == stop:
-                    await send_message(websocket, "\r\nStopping")
-                    active_robots[id].state = RobotState.STOP
-                else:
-                    await send_message(websocket, "\r\nUnrecognised command")
+#                     if not valid:
+#                         await send_message(websocket, "\r\nInvalid robot ID, try again: ")
+#                         robot_id = ""
+#                         state = MenuState.SELECT
+#                 else:
+#                     await send_message(websocket, key)
+#                     robot_id = robot_id + key
+#             elif state == MenuState.DRIVE:
+#                 id = int(robot_id)
+#                 if key == release:
+#                     await send_message(websocket, "\r\nReleasing control of robot: " + robot_id)
+#                     active_robots[id].teleop = False
+#                     active_robots[id].state = RobotState.STOP
+#                     state = MenuState.START
+#                 elif key == forwards:
+#                     await send_message(websocket, "\r\nDriving forwards")
+#                     active_robots[id].state = RobotState.FORWARDS
+#                 elif key == backwards:
+#                     await send_message(websocket, "\r\nDriving backwards")
+#                     active_robots[id].state = RobotState.BACKWARDS
+#                 elif key == left:
+#                     await send_message(websocket, "\r\nTurning left")
+#                     active_robots[id].state = RobotState.LEFT
+#                 elif key == right:
+#                     await send_message(websocket, "\r\nTurning right")
+#                     active_robots[id].state = RobotState.RIGHT
+#                 elif key == stop:
+#                     await send_message(websocket, "\r\nStopping")
+#                     active_robots[id].state = RobotState.STOP
+#                 else:
+#                     await send_message(websocket, "\r\nUnrecognised command")
 
 
 # Main entry point for robot control client sample code
@@ -448,7 +449,7 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = range(0, 0)
+    robot_ids = [35]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
@@ -469,10 +470,10 @@ if __name__ == "__main__":
         print(Fore.RED + "[ERROR]: No connection to robots")
         sys.exit(1)
 
-    # Listen for any keyboard input from teleop websocket client
-    print(Fore.GREEN + "[INFO]: Starting teleop server")
-    start_server = websockets.serve(ws_handler=handler, host=None, port=7000, ping_interval=None, ping_timeout=None)
-    loop.run_until_complete(start_server)
+    # # Listen for any keyboard input from teleop websocket client
+    # print(Fore.GREEN + "[INFO]: Starting teleop server")
+    # start_server = websockets.serve(ws_handler=handler, host=None, port=7000, ping_interval=None, ping_timeout=None)
+    # loop.run_until_complete(start_server)
 
     # Only communicate with robots that were successfully connected to
     while True:
