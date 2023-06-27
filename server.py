@@ -202,7 +202,16 @@ class Tracker(threading.Thread):
                         for neighbour_id in robot.neighbours.keys():
                             neighbour = self.robots[neighbour_id]
                             cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), cyan, 3, lineType=cv2.LINE_AA)
+                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
+
+                        # Draw lines to tasks if they are within sensor range
+                        for robot_task_id in robot.tasks.keys():
+                            for task_id, task in self.tasks.items():
+                                if task_id == robot_task_id:
+                                    task_x = int(task.position.x * self.scale_factor)
+                                    task_y = int(task.position.y * self.scale_factor)
+                                    cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), black, 10, lineType=cv2.LINE_AA)
+                                    cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), cyan, 3, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
@@ -262,6 +271,9 @@ class Tracker(threading.Thread):
                         time_limit = TASK_TIME_LIMIT
                         self.tasks[id] = Task(id, workers, position, radius, time_limit)
                         self.task_counter = self.task_counter + 1
+
+                    for robot_id, robot in self.robots.items():
+                        robot.tasks = {}
 
                     # Iterate over tasks
                     for task_id, task in self.tasks.items():
