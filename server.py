@@ -130,6 +130,8 @@ class Tracker(threading.Thread):
                                 self.robots[tag.id].position = position
                                 self.robots[id].orientation = tag.angle
                                 self.robots[id].tag = tag
+                                # self.robots[id].tasks = {}
+                                self.robots[id].neighbours = {}
                             else:
                                 self.robots[id] = Robot(tag, position)
                     else: # Only calibrate the first time two corner tags are detected
@@ -240,7 +242,7 @@ class Tracker(threading.Thread):
                         textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                         position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) - int(textsize[1] * 2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, yellow, thickness, cv2.LINE_AA)
 
                     # Create any new tasks, if necessary
                     while len(self.tasks) < TASK_LIMIT:
@@ -322,7 +324,7 @@ class Tracker(threading.Thread):
                         cv2.circle(image, (x, y), pixel_radius, black, 10, lineType=cv2.LINE_AA)
                         cv2.circle(image, (x, y), pixel_radius, colour, 5, lineType=cv2.LINE_AA)
 
-                        # Draw task ID
+                        # Draw task value
                         text = str(task.workers)
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         font_scale = 1.5
@@ -331,6 +333,16 @@ class Tracker(threading.Thread):
                         position = (int(x - textsize[0]/2), int(y + textsize[1]/2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+
+                        # Draw task ID
+                        text = str(task.id)
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1.5
+                        thickness = 4
+                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                        position = (int(x - textsize[0] / 2), int(y + textsize[1] / 2) - pixel_radius - textsize[1])
+                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, cyan, thickness, cv2.LINE_AA)
 
                     # Delete completed tasks
                     for task_id in list(self.tasks.keys()):
