@@ -14,6 +14,10 @@ import random
 import angles
 import time
 
+TASK_LIMIT = 20 # Maximum number of tasks
+TASK_SIZE = 0.05 # Metres?
+TASK_TIME_LIMIT = 30 # Seconds
+
 red = (0, 0, 255)
 green = (0, 255, 0)
 magenta = (255, 0, 255)
@@ -55,6 +59,7 @@ class Robot:
         self.sensor_range = 0.3 # 30cm sensing radius
         self.neighbours = {}
         self.tasks = {}
+        self.score = 0
 
 class SensorReading:
     def __init__(self, range, bearing, orientation=0, workers=0):
@@ -105,7 +110,7 @@ class Tracker(threading.Thread):
 
             (raw_tags, tag_ids, rejected) = cv2.aruco.detectMarkers(image, aruco_dictionary, parameters=aruco_parameters)
 
-            self.robots = {} # Clear dictionary every frame in case robots have disappeared
+            #self.robots = {} # Clear dictionary every frame in case robots have disappeared
 
             # Check whether any tags were detected in this camera frame
             if tag_ids is not None and len(tag_ids.tolist()) > 0:
@@ -121,7 +126,12 @@ class Tracker(threading.Thread):
                     if self.calibrated:
                         if tag.id != 0: # Reserved tag ID for corners
                             position = Vector2D(tag.centre.x / self.scale_factor, tag.centre.y / self.scale_factor) # Convert pixel coordinates to metres
-                            self.robots[id] = Robot(tag, position)
+                            if (tag.id in self.robots.keys()):
+                                self.robots[tag.id].position = position
+                                self.robots[id].orientation = tag.angle
+                                self.robots[id].tag = tag
+                            else:
+                                self.robots[id] = Robot(tag, position)
                     else: # Only calibrate the first time two corner tags are detected
                        
                         if tag.id == 0: # Reserved tag ID for corners
@@ -213,14 +223,25 @@ class Tracker(threading.Thread):
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
+                        # Draw robot score
+                        text = str(robot.score)
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1.5
+                        thickness = 4
+                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                        position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) - int(textsize[1] * 2))
+                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+
                     # Create any new tasks, if necessary
-                    while len(self.tasks) < 3:
+                    while len(self.tasks) < TASK_LIMIT:
                         id = self.task_counter
                         placed = False
                         while not placed:
                             overlaps = False
                             workers = random.randint(1, 5)
-                            radius = math.sqrt(workers) * 0.1
+                            # radius = math.sqrt(workers) * 0.1
+                            radius = TASK_SIZE
                             min_x_metres = self.min_x / self.scale_factor
                             max_x_metres = self.max_x / self.scale_factor
                             min_y_metres = self.min_y / self.scale_factor
@@ -237,7 +258,8 @@ class Tracker(threading.Thread):
                             if not overlaps:
                                 placed = True
 
-                        time_limit = 20 * workers # 20 seconds per robot
+                        # time_limit = 20 * workers # 20 seconds per robot
+                        time_limit = TASK_TIME_LIMIT
                         self.tasks[id] = Task(id, workers, position, radius, time_limit)
                         self.task_counter = self.task_counter + 1
 
@@ -260,11 +282,13 @@ class Tracker(threading.Thread):
 
                             if distance < task.radius:
                                 task.robots.append(robot_id)
+                                task.completed = True
+                                robot.score += task.workers
+
 
                         # print(f"Task {task_id} - workers: {task.workers}, robots: {task.robots}")
-                            
-                        if len(task.robots) >= task.workers:
-                            task.completed = True
+
+                        # if len(task.robots) >= task.workers:
 
                         pixel_radius = int(task.radius * self.scale_factor)
                         x = int(task.position.x * self.scale_factor)
@@ -275,7 +299,7 @@ class Tracker(threading.Thread):
                         task.elapsed_time = time_now - task.start_time
                         if task.elapsed_time > 1:
                             task.start_time = time_now
-                            task.counter = task.counter - 1
+                            #task.counter = task.counter - 1
                             if task.counter <= 1:
                                 task.failed = True
                         cv2.circle(overlay, (x, y), int((pixel_radius / task.time_limit) * task.counter), cyan, -1, lineType=cv2.LINE_AA)
@@ -306,14 +330,14 @@ class Tracker(threading.Thread):
                             del self.tasks[task_id]
 
 
-                    text = f"Score: {self.score}"
-                    font = cv2.FONT_HERSHEY_SIMPLEX
-                    font_scale = 2
-                    thickness = 5
-                    textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                    position = (10, 60)
-                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                    cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                    # text = f"Score: {self.score}"
+                    # font = cv2.FONT_HERSHEY_SIMPLEX
+                    # font_scale = 2
+                    # thickness = 5
+                    # textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                    # position = (10, 60)
+                    # cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    # cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
                     # Transparency for overlaid augments
                     alpha = 0.3
