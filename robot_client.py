@@ -79,6 +79,7 @@ class RobotState(Enum):
     LEFT = 3
     RIGHT = 4
     STOP = 5
+    FORAGING = 6
 
 
 # Main Robot class to keep track of robot states
@@ -305,7 +306,25 @@ async def send_commands(robot):
         #     elif robot.state == RobotState.STOP:
         #         left = right = 0
         # else:
+
+        target_task_id = None
+        target_task_distance = 100
+        target_task_value = 0
+
+        for task_id, task in robot.tasks.items():
+            task_value = task["workers"]
+            task_distance = task["range"]
+            if task_value > target_task_value:
+                if task_distance < target_task_distance:
+                    target_task_id = task_id
+                    target_task_value = task_value
+                    target_task_distance = task_distance
+                    robot.state = RobotState.FORAGING
+            print(task_id, task)
         
+        print("target_task_id:", target_task_id, "target_task_value:", target_task_value, "target_task_distance:", round(target_task_distance, 2))
+        print()        
+
         # Autonomous mode
         if robot.state == RobotState.FORWARDS:
             left = right = robot.MAX_SPEED
@@ -332,6 +351,33 @@ async def send_commands(robot):
             left = right = 0
             robot.turn_time = time.time()
             robot.state = RobotState.FORWARDS
+        elif robot.state == RobotState.FORAGING:
+            left = robot.MAX_SPEED
+            right = robot.MAX_SPEED
+            if target_task_id is not None:
+                target_task = robot.tasks[target_task_id]
+                print("targeting:", target_task_id, target_task)
+                
+                bearing = target_task["bearing"]
+                turn_threshold_angle = 2.5
+                min_speed = int(robot.MAX_SPEED/2)
+
+                angle_ratio = abs(bearing)/180
+                scaled_speed = (robot.MAX_SPEED - min_speed) / angle_ratio
+                speed = int(scaled_speed + min_speed)
+
+                print("bearing:", round(bearing, 2))
+                print("angle_ratio:", round(angle_ratio, 2))
+                print("scaled_speed:", round(scaled_speed, 2))
+                print("speed:", speed)
+
+                if bearing > turn_threshold_angle:
+                    left = speed
+                    right = 0
+                elif bearing < -turn_threshold_angle:
+                    left = 0
+                    right = speed
+
 
         message["set_motor_speeds"] = {}
         message["set_motor_speeds"]["left"] = left
