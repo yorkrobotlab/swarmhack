@@ -17,11 +17,13 @@ import colorama
 from colorama import Fore
 colorama.init(autoreset=True)
 
-def foraging_strategy(food_items):
+def foraging_strategy(food_items, opponents):
 
     target = None
 
     print(food_items)
+    print(opponents)
+
     for food in food_items:
         print(food)
 
@@ -44,7 +46,18 @@ class Food:
         self.angle = food_angle
 
     def __repr__(self):
-        return f'(ID: {self.id}, Value: {self.value}, Distance: {self.distance}, Angle: {self.angle})'
+        return f'Food(ID: {self.id}, Value: {self.value}, Distance: {self.distance}, Angle: {self.angle})'
+    
+
+class Opponent:
+    def __init__(self, opponent_id, opponent_distance, opponent_angle):
+        self.id = opponent_id
+        self.distance = opponent_distance
+        self.angle = opponent_angle
+
+    def __repr__(self):
+        return f'Opponent(ID: {self.id}, Distance: {self.distance}, Angle: {self.angle})'
+
 
 ##
 # Replace `server_none` with one of `server_york`, `server_sheffield`, or `server_manchester` here,
@@ -254,7 +267,8 @@ async def get_server_data():
         for id, robot in filtered_reply.items():
             active_robots[id].orientation = robot["orientation"]
             # Filter out any neighbours that aren't our active robots
-            active_robots[id].neighbours = {k: v for (k, v) in robot["neighbours"].items() if int(k) in active_robots.keys()}
+            # active_robots[id].neighbours = {k: v for (k, v) in robot["neighbours"].items() if int(k) in active_robots.keys()}
+            active_robots[id].neighbours = robot["neighbours"]
             active_robots[id].tasks = robot["tasks"]
             print(f"Robot {id}")
             print(f"Orientation = {active_robots[id].orientation}")
@@ -324,7 +338,14 @@ async def send_commands(robot):
             food_angle = task["bearing"]
             food_items.append(Food(task_id, food_value, round(food_distance, 2), round(food_angle, 2)))
 
-        target = foraging_strategy(food_items)
+        opponents = []
+
+        for neighbour_id, neighbour in robot.neighbours.items():
+            opponent_distance = neighbour["range"]
+            opponent_angle = neighbour["bearing"]
+            opponents.append(Opponent(neighbour_id, round(opponent_distance, 2), round(opponent_angle, 2)))
+
+        target = foraging_strategy(food_items, opponents)
 
         # Construct command message
         message = {}
