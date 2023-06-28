@@ -18,6 +18,34 @@ from colorama import Fore
 
 colorama.init(autoreset=True)
 
+def foraging_strategy(food_items):
+
+    target = None
+
+    print(food_items)
+    for food in food_items:
+        print(food)
+
+        if target is None:
+            target = food
+        else:
+            if food.value > target.value:
+                if food.distance < target.distance:
+                    target = food
+
+    print("TARGET:", target)
+    return target
+
+    
+class Food:
+    def __init__(self, food_id, food_value, food_distance, food_angle):
+        self.id = food_id
+        self.value = food_value
+        self.distance = food_distance
+        self.angle = food_angle
+
+    def __repr__(self):
+        return f'(ID: {self.id}, Value: {self.value}, Distance: {self.distance}, Angle: {self.angle})'
 
 ##
 # Replace `server_none` with one of `server_york`, `server_sheffield`, or `server_manchester` here,
@@ -287,12 +315,19 @@ async def send_commands(robot):
             message["set_motor_speeds"]["right"] = 0
             await robot.connection.send(json.dumps(message))
 
+
+        food_items = []        
+
+        for task_id, task in robot.tasks.items():
+            food_value = task["workers"]
+            food_distance = task["range"]
+            food_angle = task["bearing"]
+            food_items.append(Food(task_id, food_value, round(food_distance, 2), round(food_angle, 2)))
+
+        target = foraging_strategy(food_items)
+
         # Construct command message
         message = {}
-
-        target_task_id = None
-        target_task_distance = 100
-        target_task_value = 0
 
         print("RobotState:", robot.state)
 
@@ -303,7 +338,7 @@ async def send_commands(robot):
                 robot.turn_time = time.time()
                 robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
             else:
-                if robot.tasks != {}:
+                if target is not None:
                     robot.state = RobotState.FORAGING
         if robot.state == RobotState.BACKWARDS:
             left = right = -robot.MAX_SPEED
@@ -326,26 +361,13 @@ async def send_commands(robot):
             robot.turn_time = time.time()
             robot.state = RobotState.FORWARDS
         if robot.state == RobotState.FORAGING:
-            for task_id, task in robot.tasks.items():
-                task_value = task["workers"]
-                task_distance = task["range"]
-                if task_value > target_task_value:
-                    if task_distance < target_task_distance:
-                        target_task_id = task_id
-                        target_task_value = task_value
-                        target_task_distance = task_distance
-                print(task_id, task)
-            
-            print("target_task_id:", target_task_id, "target_task_value:", target_task_value, "target_task_distance:", round(target_task_distance, 2))
-            print()
 
             left = robot.MAX_SPEED
             right = robot.MAX_SPEED
-            if target_task_id is not None:
-                target_task = robot.tasks[target_task_id]
-                print("targeting:", target_task_id, target_task)
-                
-                bearing = target_task["bearing"]
+
+            if target is not None:
+
+                bearing = target.angle
                 turn_threshold_angle = 2.5
                 min_speed = int(robot.MAX_SPEED/2)
 
