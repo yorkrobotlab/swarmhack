@@ -30,11 +30,38 @@ def foraging_strategy(food_items, opponents):
         if target is None:
             target = food
             continue
+
+        # if food.distance > target.distance:
+        #     target = food
+
+        # if food.value > target.value:
+        #     target = food
         
         if (food.value >= target.value) and (food.distance < target.distance):
             target = food
 
     print("TARGET:", target)
+
+    food_items.sort(key = lambda x: x.value, reverse = True)
+    print("SORTED:")
+    for food in food_items:
+        print(food)
+
+    # Highest value
+    # Lowest distance
+    # Fewest opponents
+
+    nearby_opponents = {}
+
+    for food in food_items:
+        nearby_opponents[food.id] = 0
+        for opponent in opponents:
+            if (opponent.angle < 0 and food.angle < 0) or (opponent.angle > 0 and food.angle > 0):
+                nearby_opponents[food.id] += 1
+
+    print("NEARBY OPPONENTS:")
+    print(nearby_opponents)
+
     return target
 
     
