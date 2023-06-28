@@ -15,7 +15,6 @@ import inspect
 
 import colorama
 from colorama import Fore
-
 colorama.init(autoreset=True)
 
 def foraging_strategy(food_items):
@@ -28,10 +27,10 @@ def foraging_strategy(food_items):
 
         if target is None:
             target = food
-        else:
-            if food.value > target.value:
-                if food.distance < target.distance:
-                    target = food
+            continue
+        
+        if (food.value >= target.value) and (food.distance < target.distance):
+            target = food
 
     print("TARGET:", target)
     return target
@@ -136,6 +135,8 @@ class Robot:
         self.battery_voltage = 0
         self.battery_percentage = 0
 
+        self.left_speed = 0
+        self.right_speed = 0
         self.turn_time = time.time()
 
         # Pi-puck IR is more sensitive than Mona, so use higher threshold for obstacle detection
@@ -315,7 +316,6 @@ async def send_commands(robot):
             message["set_motor_speeds"]["right"] = 0
             await robot.connection.send(json.dumps(message))
 
-
         food_items = []        
 
         for task_id, task in robot.tasks.items():
@@ -333,7 +333,7 @@ async def send_commands(robot):
 
         # Autonomous mode
         if robot.state == RobotState.FORWARDS:
-            left = right = robot.MAX_SPEED
+            robot.left_speed = robot.right_speed = robot.MAX_SPEED
             if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
                 robot.turn_time = time.time()
                 robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
@@ -341,51 +341,54 @@ async def send_commands(robot):
                 if target is not None:
                     robot.state = RobotState.FORAGING
         if robot.state == RobotState.BACKWARDS:
-            left = right = -robot.MAX_SPEED
+            robot.left_speed = robot.right_speed = -robot.MAX_SPEED
             robot.turn_time = time.time()
             robot.state = RobotState.FORWARDS
         if robot.state == RobotState.LEFT:
-            left = -robot.MAX_SPEED
-            right = robot.MAX_SPEED
+            robot.left_speed = -robot.MAX_SPEED
+            robot.right_speed = robot.MAX_SPEED
             if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
         if robot.state == RobotState.RIGHT:
-            left = robot.MAX_SPEED
-            right = -robot.MAX_SPEED
+            robot.left_speed = robot.MAX_SPEED
+            robot.right_speed = -robot.MAX_SPEED
             if time.time() - robot.turn_time > random.uniform(0.5, 1.0):
                 robot.turn_time = time.time()
                 robot.state = RobotState.FORWARDS
         if robot.state == RobotState.STOP:
-            left = right = 0
+            robot.left_speed = robot.right_speed = 0
             robot.turn_time = time.time()
             robot.state = RobotState.FORWARDS
         if robot.state == RobotState.FORAGING:
 
-            left = robot.MAX_SPEED
-            right = robot.MAX_SPEED
-
             if target is not None:
 
                 bearing = target.angle
-                turn_threshold_angle = 2.5
-                min_speed = int(robot.MAX_SPEED/2)
+                turn_threshold_angle = 5
+                min_speed = int(robot.MAX_SPEED * 0.7)
 
                 angle_ratio = abs(bearing)/180
-                scaled_speed = (robot.MAX_SPEED - min_speed) / angle_ratio
+                scaled_speed = (robot.MAX_SPEED - min_speed) * angle_ratio
                 speed = int(scaled_speed + min_speed)
 
                 print("bearing:", round(bearing, 2))
                 print("angle_ratio:", round(angle_ratio, 2))
+                print("max_speed:", robot.MAX_SPEED)
+                print("min_speed:", min_speed)
                 print("scaled_speed:", round(scaled_speed, 2))
                 print("speed:", speed)
 
                 if bearing > turn_threshold_angle:
-                    left = speed
-                    right = 0
+                    robot.left_speed = speed
+                    robot.right_speed = 0
                 elif bearing < -turn_threshold_angle:
-                    left = 0
-                    right = speed
+                    robot.left_speed = 0
+                    robot.right_speed = speed
+                else:
+                    robot.left_speed = robot.right_speed = robot.MAX_SPEED
+            else:
+                robot.state = RobotState.FORWARDS
 
             if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
                 robot.turn_time = time.time()
@@ -393,8 +396,8 @@ async def send_commands(robot):
 
 
         message["set_motor_speeds"] = {}
-        message["set_motor_speeds"]["left"] = left
-        message["set_motor_speeds"]["right"] = right
+        message["set_motor_speeds"]["left"] = robot.left_speed
+        message["set_motor_speeds"]["right"] = robot.right_speed
 
         # Set RGB LEDs based on battery voltage
         if robot.battery_voltage < robot.BAT_LOW_VOLTAGE:
