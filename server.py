@@ -13,6 +13,7 @@ import itertools
 import random
 import angles
 import time
+from pynput import keyboard
 
 TASK_LIMIT = 20 # Maximum number of tasks
 TASK_SIZE = 0.05 # Metres?
@@ -99,6 +100,25 @@ class Tracker(threading.Thread):
         self.tasks = {}
         self.task_counter = 0
         self.score = 0
+
+        listener = keyboard.Listener(
+            on_press=self.on_press)
+        listener.start()
+
+    def on_press(self, key):
+        try:
+            if key.char == 's':
+                for robot_id, robot in self.robots.items():
+                    print("Clearing robot scores")
+                    robot.score = 0
+            if key.char == 't':
+                print("Clearing tasks")
+                self.tasks = {}
+                self.task_counter = 0
+        except AttributeError as e:
+            print('special key {0} pressed'.format(
+                key))
+            print(e)
 
     def run(self):
         while True:        
