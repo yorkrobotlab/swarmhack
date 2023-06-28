@@ -15,7 +15,7 @@ import angles
 import time
 from pynput import keyboard
 
-TASK_LIMIT = 20 # Maximum number of tasks
+TASK_LIMIT = 5 # Maximum number of tasks
 TASK_SIZE = 0.05 # Metres?
 TASK_TIME_LIMIT = 30 # Seconds
 
@@ -115,6 +115,9 @@ class Tracker(threading.Thread):
                 print("Clearing tasks")
                 self.tasks = {}
                 self.task_counter = 0
+            if key.char == 'r':
+                print("Clearing robots")
+                self.robots = {}
         except AttributeError as e:
             print('special key {0} pressed'.format(
                 key))
