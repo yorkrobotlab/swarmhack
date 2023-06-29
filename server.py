@@ -118,6 +118,7 @@ class Tracker(threading.Thread):
         self.tasks = {}
         self.task_counter = 0
         self.score = 0
+        self.show_debug_info = True
 
         listener = keyboard.Listener(
             on_press=self.on_press)
@@ -136,6 +137,9 @@ class Tracker(threading.Thread):
             if key.char == 'r':
                 print("Clearing robots")
                 self.robots = {}
+            if key.char == 'h':
+                print("Toggling debugging information")
+                self.show_debug_info = not self.show_debug_info
         except AttributeError as e:
             print('special key {0} pressed'.format(
                 key))
@@ -237,24 +241,26 @@ class Tracker(threading.Thread):
                         # Draw circle on centre point
                         cv2.circle(image, (tag.centre.x, tag.centre.y), 5, red, -1, lineType=cv2.LINE_AA)
 
-                        # Draw robot's sensor range
-                        sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
-                        cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
+                        if self.show_debug_info:
+                            # Draw robot's sensor range
+                            sensor_range_pixels = int(robot.sensor_range * self.scale_factor)
+                            cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
 
-                        # Draw lines between robots if they are within sensor range
-                        for neighbour_id in robot.neighbours.keys():
-                            neighbour = self.robots[neighbour_id]
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
-                            cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
+                        if self.show_debug_info:
+                            # Draw lines between robots if they are within sensor range
+                            for neighbour_id in robot.neighbours.keys():
+                                neighbour = self.robots[neighbour_id]
+                                cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
+                                cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
 
-                        # Draw lines to tasks if they are within sensor range
-                        for robot_task_id in robot.tasks.keys():
-                            for task_id, task in self.tasks.items():
-                                if task_id == robot_task_id:
-                                    task_x = int(task.position.x * self.scale_factor)
-                                    task_y = int(task.position.y * self.scale_factor)
-                                    cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), black, 10, lineType=cv2.LINE_AA)
-                                    cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), cyan, 3, lineType=cv2.LINE_AA)
+                            # Draw lines to tasks if they are within sensor range
+                            for robot_task_id in robot.tasks.keys():
+                                for task_id, task in self.tasks.items():
+                                    if task_id == robot_task_id:
+                                        task_x = int(task.position.x * self.scale_factor)
+                                        task_y = int(task.position.y * self.scale_factor)
+                                        cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), black, 10, lineType=cv2.LINE_AA)
+                                        cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), cyan, 3, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
@@ -374,17 +380,19 @@ class Tracker(threading.Thread):
                         textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                         position = (int(x - textsize[0]/2), int(y + textsize[1]/2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
+                        # cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
 
                         # Draw task ID
-                        text = str(task.id)
-                        font = cv2.FONT_HERSHEY_SIMPLEX
-                        font_scale = 1.5
-                        thickness = 4
-                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                        position = (int(x - textsize[0] / 2), int(y + textsize[1] / 2) - pixel_radius - textsize[1])
-                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(image, text, position, font, font_scale, cyan, thickness, cv2.LINE_AA)
+                        if self.show_debug_info:
+                            text = str(task.id)
+                            font = cv2.FONT_HERSHEY_SIMPLEX
+                            font_scale = 1.5
+                            thickness = 4
+                            textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                            position = (int(x - textsize[0] / 2), int(y + textsize[1] / 2) - pixel_radius - textsize[1])
+                            cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                            cv2.putText(image, text, position, font, font_scale, cyan, thickness, cv2.LINE_AA)
 
                     # Delete completed tasks
                     for task_id in list(self.tasks.keys()):
