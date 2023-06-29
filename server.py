@@ -15,9 +15,27 @@ import angles
 import time
 from pynput import keyboard
 
-TASK_LIMIT = 5 # Maximum number of tasks
+TASK_LIMIT = 20 # Maximum number of tasks
 TASK_SIZE = 0.05 # Metres?
 TASK_TIME_LIMIT = 30 # Seconds
+
+robot_names = {}
+
+for robot_id in range(31, 41):
+    robot_names[robot_id] = str(robot_id)
+    # robot_names[robot_id] = str(robot_id - 30)
+    # robot_names[robot_id] = "Team " + str(robot_id - 30)
+
+# robot_names[31] = "A"
+# robot_names[32] = "B"
+# robot_names[33] = "C"
+# robot_names[34] = "D"
+# robot_names[35] = "E"
+# robot_names[36] = "F"
+# robot_names[37] = "G"
+# robot_names[38] = "H"
+# robot_names[39] = "I"
+# robot_names[40] = "J"
 
 red = (0, 0, 255)
 green = (0, 255, 0)
@@ -248,7 +266,8 @@ class Tracker(threading.Thread):
                         cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
 
                         # Draw tag ID
-                        text = str(tag.id)
+                        text = robot_names[tag.id]
+                        # text = str(tag.id)
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         font_scale = 1.5
                         thickness = 4
