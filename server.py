@@ -98,6 +98,7 @@ class Task:
         self.completed = False
         self.failed = False
         self.start_time = time.time()
+        self.opponents = {} # Dictionary mapping robot ID to SensorReading (range and bearing)
 
 class Tracker(threading.Thread):
 
@@ -247,11 +248,11 @@ class Tracker(threading.Thread):
                             cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
 
                         if self.show_debug_info:
-                            # Draw lines between robots if they are within sensor range
-                            for neighbour_id in robot.neighbours.keys():
-                                neighbour = self.robots[neighbour_id]
-                                cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
-                                cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
+                            # # Draw lines between robots if they are within sensor range
+                            # for neighbour_id in robot.neighbours.keys():
+                            #     neighbour = self.robots[neighbour_id]
+                            #     cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
+                            #     cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
 
                             # Draw lines to tasks if they are within sensor range
                             for robot_task_id in robot.tasks.keys():
@@ -341,6 +342,8 @@ class Tracker(threading.Thread):
                                 normalised_bearing = angles.normalize(relative_bearing, -180, 180)
 
                                 robot.tasks[task_id] = SensorReading(distance, normalised_bearing, workers=task.workers)
+
+                                task.opponents[robot_id] = SensorReading(distance, 0) # Don't care about the bearing?
 
                             if distance < task.radius:
                                 task.robots.append(robot_id)
@@ -447,21 +450,28 @@ async def handler(websocket):
 
             for id, robot in tracker.robots.items():
                 reply[id] = {}
-                reply[id]["orientation"] = robot.orientation
+                reply[id]["orientation"] = round(robot.orientation, 2)
                 reply[id]["neighbours"] = {}
                 reply[id]["tasks"] = {}
 
-                for neighbour_id, neighbour in robot.neighbours.items():
-                    reply[id]["neighbours"][neighbour_id] = {}
-                    reply[id]["neighbours"][neighbour_id]["range"] = neighbour.range
-                    reply[id]["neighbours"][neighbour_id]["bearing"] = neighbour.bearing
-                    reply[id]["neighbours"][neighbour_id]["orientation"] = neighbour.orientation
+                # for neighbour_id, neighbour in robot.neighbours.items():
+                #     reply[id]["neighbours"][neighbour_id] = {}
+                #     reply[id]["neighbours"][neighbour_id]["range"] = round(neighbour.range, 2)
+                #     reply[id]["neighbours"][neighbour_id]["bearing"] = round(neighbour.bearing, 2)
+                #     reply[id]["neighbours"][neighbour_id]["orientation"] = round(neighbour.orientation, 2)
 
                 for task_id, task in robot.tasks.items():
                     reply[id]["tasks"][task_id] = {}
-                    reply[id]["tasks"][task_id]["range"] = task.range
-                    reply[id]["tasks"][task_id]["bearing"] = task.bearing
-                    reply[id]["tasks"][task_id]["workers"] = task.workers
+                    reply[id]["tasks"][task_id]["range"] = round(task.range, 2)
+                    reply[id]["tasks"][task_id]["bearing"] = round(task.bearing, 2)
+                    reply[id]["tasks"][task_id]["workers"] = round(task.workers, 2)
+
+                    reply[id]["tasks"][task_id]["opponents"] = {}
+                    for global_task_id, global_task in tracker.tasks.items():
+                        if task_id == global_task_id:
+                            for opponent_id, opponent in global_task.opponents.items():
+                                reply[id]["tasks"][task_id]["opponents"][opponent_id] = {}
+                                reply[id]["tasks"][task_id]["opponents"][opponent_id]["range"] = round(opponent.range, 2)
 
             send_reply = True
 
