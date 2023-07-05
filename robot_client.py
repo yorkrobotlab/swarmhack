@@ -17,12 +17,13 @@ import colorama
 from colorama import Fore
 colorama.init(autoreset=True)
 
-def foraging_strategy(food_items, opponents):
+def foraging_strategy(food_items):
 
     target = None
 
     print(food_items)
-    print(opponents)
+
+    closest_to = []
 
     for food in food_items:
         print(food)
@@ -37,53 +38,54 @@ def foraging_strategy(food_items, opponents):
         # if food.value > target.value:
         #     target = food
         
-        if (food.value >= target.value) and (food.distance < target.distance):
+        # if (food.value >= target.value) and (food.distance < target.distance):
+        #     target = food
+
+        closest = True
+
+        for opponent in food.opponents:
+            if opponent.distance < food.distance:
+                closest = False
+                break
+        
+        if closest:
+            closest_to.append(food)
+
+    print("CLOSEST TO:")
+    for food in closest_to:
+        print(food)
+        if food.value > target.value:
             target = food
 
     print("TARGET:", target)
 
-    food_items.sort(key = lambda x: x.value, reverse = True)
-    print("SORTED:")
-    for food in food_items:
-        print(food)
-
-    # Highest value
-    # Lowest distance
-    # Fewest opponents
-
-    nearby_opponents = {}
-
-    for food in food_items:
-        nearby_opponents[food.id] = 0
-        for opponent in opponents:
-            if (opponent.angle < 0 and food.angle < 0) or (opponent.angle > 0 and food.angle > 0):
-                nearby_opponents[food.id] += 1
-
-    print("NEARBY OPPONENTS:")
-    print(nearby_opponents)
+    # food_items.sort(key = lambda x: x.value, reverse = True)
+    # print("SORTED:")
+    # for food in food_items:
+    #     print(food)
 
     return target
 
     
 class Food:
-    def __init__(self, food_id, food_value, food_distance, food_angle):
+    def __init__(self, food_id, food_value, food_distance, food_angle, food_opponents):
         self.id = food_id
         self.value = food_value
         self.distance = food_distance
         self.angle = food_angle
+        self.opponents = food_opponents
 
     def __repr__(self):
-        return f'Food(ID: {self.id}, Value: {self.value}, Distance: {self.distance}, Angle: {self.angle})'
+        return f'Food(ID: {self.id}, Value: {self.value}, Distance: {self.distance}, Angle: {self.angle}, Opponents: {self.opponents})'
     
 
 class Opponent:
-    def __init__(self, opponent_id, opponent_distance, opponent_angle):
+    def __init__(self, opponent_id, opponent_distance):
         self.id = opponent_id
         self.distance = opponent_distance
-        self.angle = opponent_angle
 
     def __repr__(self):
-        return f'Opponent(ID: {self.id}, Distance: {self.distance}, Angle: {self.angle})'
+        return f'Opponent(ID: {self.id}, Distance: {self.distance})'
 
 
 ##
@@ -363,16 +365,15 @@ async def send_commands(robot):
             food_value = task["workers"]
             food_distance = task["range"]
             food_angle = task["bearing"]
-            food_items.append(Food(task_id, food_value, round(food_distance, 2), round(food_angle, 2)))
+            food_opponents = []
 
-        opponents = []
+            for opponent_id, opponent in task["opponents"].items():
+                opponent_distance = opponent["range"]
+                food_opponents.append(Opponent(opponent_id, opponent_distance))
 
-        for neighbour_id, neighbour in robot.neighbours.items():
-            opponent_distance = neighbour["range"]
-            opponent_angle = neighbour["bearing"]
-            opponents.append(Opponent(neighbour_id, round(opponent_distance, 2), round(opponent_angle, 2)))
+            food_items.append(Food(task_id, food_value, food_distance, food_angle, food_opponents))
 
-        target = foraging_strategy(food_items, opponents)
+        target = foraging_strategy(food_items)
 
         # Construct command message
         message = {}
@@ -472,7 +473,8 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = [31]
+    robot_ids = range(31, 41)
+    # robot_ids = [32]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
