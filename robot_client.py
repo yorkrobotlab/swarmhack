@@ -17,6 +17,10 @@ import colorama
 from colorama import Fore
 colorama.init(autoreset=True)
 
+# Specify robot IDs to work with here. For example for robots 31-40 use:
+# robot_ids = range(31, 41)
+robot_ids = [33]
+
 def foraging_strategy(food_items):
 
     target = None
@@ -508,14 +512,8 @@ if __name__ == "__main__":
         print(Fore.RED + "[ERROR]: No connection to server")
         sys.exit(1)
 
-    # Specify robot IDs to work with here. For example for robots 11-15 use:
-    #  robot_ids = range(11, 16)
-    # robot_ids = range(31, 41)
-    robot_ids = [32]
-
     if len(robot_ids) == 0:
-        raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
-                        f"then re-run this script.")
+        raise Exception(f"Enter range of robot IDs to control")
 
     # Create Robot objects
     for robot_id in robot_ids:
