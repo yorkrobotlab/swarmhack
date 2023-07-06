@@ -28,9 +28,9 @@ def foraging_strategy(food_items):
     for food in food_items:
         print(food)
 
-        if target is None:
-            target = food
-            continue
+        # if target is None:
+        #     target = food
+        #     continue
 
         # if food.distance > target.distance:
         #     target = food
@@ -51,11 +51,30 @@ def foraging_strategy(food_items):
         if closest:
             closest_to.append(food)
 
-    print("CLOSEST TO:")
-    for food in closest_to:
-        print(food)
-        if food.value > target.value:
-            target = food
+    # If not closest to any food item
+    if len(closest_to) == 0:
+        print("NOT CLOSEST TO!")
+        for food in food_items:
+            # Set the target to the first food item initially   
+            if target is None:
+                target = food
+                continue
+
+            # Set the target to the closest food item with the highest value
+            if (food.value >= target.value) and (food.distance < target.distance):
+                target = food
+    else:
+        print("CLOSEST TO:")
+        for food in closest_to:
+            print(food)
+            # Set the target to the first food item initially   
+            if target is None:
+                target = food
+                continue
+            
+            # Set the target to the highest value food item out of the ones we are closest to
+            if food.value > target.value:
+                target = food
 
     print("TARGET:", target)
 
@@ -473,8 +492,8 @@ if __name__ == "__main__":
 
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
-    robot_ids = range(31, 41)
-    # robot_ids = [32]
+    # robot_ids = range(31, 41)
+    robot_ids = [31]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
