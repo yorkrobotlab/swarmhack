@@ -79,6 +79,7 @@ class Robot:
         self.neighbours = {}
         self.tasks = {}
         self.score = 0
+        self.target = -1
 
 class SensorReading:
     def __init__(self, range, bearing, orientation=0, workers=0):
@@ -293,6 +294,21 @@ class Tracker(threading.Thread):
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, yellow, thickness, cv2.LINE_AA)
 
+                        if self.show_debug_info:
+                            # Draw robot target
+                            if robot.target < 0:
+                                text = "X"
+                            else:
+                                text = str(robot.target)
+                            font = cv2.FONT_HERSHEY_SIMPLEX
+                            font_scale = 1.5
+                            thickness = 4
+                            textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                            position = (
+                            int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) + int(textsize[1] * 2))
+                            cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                            cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
+
                     # Create any new tasks, if necessary
                     while len(self.tasks) < TASK_LIMIT:
                         id = self.task_counter
@@ -441,6 +457,10 @@ async def handler(websocket):
         # Process any requests received
         reply = {}
         send_reply = False
+
+        if "targets" in message:
+            for robot_id, target in message["targets"].items():
+                tracker.robots[int(robot_id)].target = int(target)
 
         if "check_awake" in message:
             reply["awake"] = True
