@@ -15,6 +15,7 @@ import angles
 import time
 from pynput import keyboard
 
+TIME_LIMIT = 180
 TASK_LIMIT = 20 # Maximum number of tasks
 TASK_SIZE = 0.05 # Metres?
 TASK_TIME_LIMIT = 30 # Seconds
@@ -122,6 +123,11 @@ class Tracker(threading.Thread):
         self.score = 0
         self.show_debug_info = True
 
+        self.start_time = time.time()
+        self.running = False
+        self.time_limit = TIME_LIMIT
+        self.time_remaining = self.time_limit
+
         listener = keyboard.Listener(
             on_press=self.on_press)
         listener.start()
@@ -138,17 +144,39 @@ class Tracker(threading.Thread):
                 self.task_counter = 0
             if key.char == 'r':
                 print("Clearing robots")
-                self.robots = {}
+                self.robots = {} # Also clears robot scores
             if key.char == 'h':
                 print("Toggling debugging information")
                 self.show_debug_info = not self.show_debug_info
+            if key.char == 'p':
+                print("Starting timer")
+                if self.running == False:
+                    self.running = True
+                    # self.tasks = {}
+                    # self.task_counter = 0
+                    self.robots = {} # Also clears robot scores
+                    self.start_time = time.time()
+            if key.char == 'm':
+                print("Resetting timer")
+                self.running = False
+                self.tasks = {}
+                self.task_counter = 0
+                self.robots = {}  # Also clears robot scores
+                self.start_time = time.time()
+                self.time_remaining = self.time_limit
         except AttributeError as e:
             print('special key {0} pressed'.format(
                 key))
             print(e)
 
     def run(self):
-        while True:        
+        while True:
+            # Stop running once timer has expired
+            if self.running and (time.time() - self.start_time >= self.time_limit):
+                self.running = False
+                self.tasks = {}
+                self.task_counter = 0
+
             image = self.camera.get_frame()
             overlay = image.copy()
             
@@ -294,7 +322,7 @@ class Tracker(threading.Thread):
                         font_scale = 1.5
                         thickness = 4
                         textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
-                        position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) - int(textsize[1] * 2))
+                        position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) + int(textsize[1] * 2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, yellow, thickness, cv2.LINE_AA)
 
@@ -309,39 +337,41 @@ class Tracker(threading.Thread):
                             thickness = 4
                             textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                             position = (
-                            int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) + int(textsize[1] * 2))
+                            int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) - int(textsize[1] * 2))
                             cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                             cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
 
-                    # Create any new tasks, if necessary
-                    while len(self.tasks) < TASK_LIMIT:
-                        id = self.task_counter
-                        placed = False
-                        while not placed:
-                            overlaps = False
-                            workers = random.randint(1, 5)
-                            # radius = math.sqrt(workers) * 0.1
-                            radius = TASK_SIZE
-                            min_x_metres = self.min_x / self.scale_factor
-                            max_x_metres = self.max_x / self.scale_factor
-                            min_y_metres = self.min_y / self.scale_factor
-                            max_y_metres = self.max_y / self.scale_factor
-                            x = random.uniform(min_x_metres + radius, max_x_metres - radius)
-                            y = random.uniform(min_y_metres + radius, max_y_metres - radius)
-                            position = Vector2D(x, y) # In metres
+                    # if self.running and (time.time() - self.start_time <= self.time_limit):
+                    if time.time() - self.start_time <= self.time_limit:
+                        # Create any new tasks, if necessary
+                        while len(self.tasks) < TASK_LIMIT:
+                            id = self.task_counter
+                            placed = False
+                            while not placed:
+                                overlaps = False
+                                workers = random.randint(1, 5)
+                                # radius = math.sqrt(workers) * 0.1
+                                radius = TASK_SIZE
+                                min_x_metres = self.min_x / self.scale_factor
+                                max_x_metres = self.max_x / self.scale_factor
+                                min_y_metres = self.min_y / self.scale_factor
+                                max_y_metres = self.max_y / self.scale_factor
+                                x = random.uniform(min_x_metres + radius, max_x_metres - radius)
+                                y = random.uniform(min_y_metres + radius, max_y_metres - radius)
+                                position = Vector2D(x, y) # In metres
 
-                            for other_task in self.tasks.values():
-                                overlap = radius + other_task.radius
-                                if position.distance_to(other_task.position) < overlap:
-                                    overlaps = True
-                            
-                            if not overlaps:
-                                placed = True
+                                for other_task in self.tasks.values():
+                                    overlap = radius + other_task.radius
+                                    if position.distance_to(other_task.position) < overlap:
+                                        overlaps = True
 
-                        # time_limit = 20 * workers # 20 seconds per robot
-                        time_limit = TASK_TIME_LIMIT
-                        self.tasks[id] = Task(id, workers, position, radius, time_limit)
-                        self.task_counter = self.task_counter + 1
+                                if not overlaps:
+                                    placed = True
+
+                            # time_limit = 20 * workers # 20 seconds per robot
+                            time_limit = TASK_TIME_LIMIT
+                            self.tasks[id] = Task(id, workers, position, radius, time_limit)
+                            self.task_counter = self.task_counter + 1
 
                     for robot_id, robot in self.robots.items():
                         robot.tasks = {}
@@ -436,6 +466,32 @@ class Tracker(threading.Thread):
                     # cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                     # cv2.putText(image, text, position, font, font_scale, green, thickness, cv2.LINE_AA)
 
+                    # Draw the timer
+                    # time_remaining = 0
+                    if self.running:
+                        self.time_remaining = int(self.time_limit + self.start_time - time.time())
+                    if self.time_remaining < 0:
+                        self.time_remaining = 0
+                    mins, secs = divmod(self.time_remaining, 60)
+                    timer = '{:02d}:{:02d}'.format(mins, secs)
+                    text = f"Timer: {timer}"
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 2
+                    thickness = 5
+                    textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                    position = (int(image.shape[1]/2 - textsize[0]/2), 60)
+                    if self.time_remaining > 0:
+                        if self.running:
+                            colour = green
+                        else:
+                            colour = yellow
+                    else:
+                        colour = red
+                    cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(image, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                    cv2.putText(overlay, text, position, font, font_scale, colour, thickness, cv2.LINE_AA)
+
                     # Transparency for overlaid augments
                     alpha = 0.3
                     image = cv2.addWeighted(overlay, alpha, image, 1 - alpha, 0)
@@ -464,7 +520,9 @@ async def handler(websocket):
 
         if "targets" in message:
             for robot_id, target in message["targets"].items():
-                tracker.robots[int(robot_id)].target = int(target)
+                id = int(robot_id)
+                if id in tracker.robots.keys():
+                    tracker.robots[id].target = int(target)
 
         if "check_awake" in message:
             reply["awake"] = True
