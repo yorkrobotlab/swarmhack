@@ -262,7 +262,11 @@ class Tracker(threading.Thread):
                                         task_x = int(task.position.x * self.scale_factor)
                                         task_y = int(task.position.y * self.scale_factor)
                                         cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), black, 10, lineType=cv2.LINE_AA)
-                                        cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), cyan, 3, lineType=cv2.LINE_AA)
+                                        if task_id == robot.target:
+                                            colour = red
+                                        else:
+                                            colour = cyan
+                                        cv2.line(image, (tag.centre.x, tag.centre.y), (task_x, task_y), colour, 3, lineType=cv2.LINE_AA)
 
                     for id, robot in self.robots.items():
 
