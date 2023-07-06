@@ -71,7 +71,7 @@ def foraging_strategy(food_items):
             if target is None:
                 target = food
                 continue
-            
+
             # Set the target to the highest value food item out of the ones we are closest to
             if food.value > target.value:
                 target = food
@@ -199,6 +199,8 @@ class Robot:
         self.left_speed = 0
         self.right_speed = 0
         self.turn_time = time.time()
+
+        self.target = Food(-1, 0, 0, 0, [])
 
         # Pi-puck IR is more sensitive than Mona, so use higher threshold for obstacle detection
         if robot_id < 31:
@@ -328,6 +330,22 @@ async def get_server_data():
         print(f"{type(e).__name__}: {e}")
 
 
+async def send_server_commands():
+    try:
+        message = {"targets": {}}
+
+        for robot_id, robot in active_robots.items():
+            target = -1
+            if robot.target:
+                target = robot.target.id
+            message["targets"][robot_id] = target
+
+        await server_connection.send(json.dumps(message))
+
+    except Exception as e:
+        print(f"send_server_commands: {type(e).__name__}: {e}")
+
+
 # Stop robot from moving and turn off its LEDs
 async def stop_robot(robot):
     try:
@@ -392,7 +410,7 @@ async def send_commands(robot):
 
             food_items.append(Food(task_id, food_value, food_distance, food_angle, food_opponents))
 
-        target = foraging_strategy(food_items)
+        robot.target = foraging_strategy(food_items)
 
         # Construct command message
         message = {}
@@ -406,7 +424,7 @@ async def send_commands(robot):
                 robot.turn_time = time.time()
                 robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
             else:
-                if target is not None:
+                if robot.target is not None:
                     robot.state = RobotState.FORAGING
         if robot.state == RobotState.BACKWARDS:
             robot.left_speed = robot.right_speed = -robot.MAX_SPEED
@@ -430,9 +448,9 @@ async def send_commands(robot):
             robot.state = RobotState.FORWARDS
         if robot.state == RobotState.FORAGING:
 
-            if target is not None:
+            if robot.target is not None:
 
-                bearing = target.angle
+                bearing = robot.target.angle
                 turn_threshold_angle = 5
                 min_speed = int(robot.MAX_SPEED * 0.7)
 
@@ -493,7 +511,7 @@ if __name__ == "__main__":
     # Specify robot IDs to work with here. For example for robots 11-15 use:
     #  robot_ids = range(11, 16)
     # robot_ids = range(31, 41)
-    robot_ids = [31]
+    robot_ids = [32]
 
     if len(robot_ids) == 0:
         raise Exception(f"Enter range of robot IDs to control on line {inspect.currentframe().f_lineno - 3}, "
@@ -528,6 +546,9 @@ if __name__ == "__main__":
         # Calculate next step of control algorithm, and send commands to robots
         print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
         loop.run_until_complete(send_robot_commands(ids))
+
+        print(Fore.GREEN + "[INFO]: Sending data to tracking server")
+        loop.run_until_complete(send_server_commands())
 
         print()
 
