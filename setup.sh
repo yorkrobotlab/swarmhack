@@ -24,7 +24,3 @@ rm -f packages.microsoft.gpg
 sudo apt install apt-transport-https
 sudo apt update
 sudo apt install code
-
-# Install git and clone GitHub repo
-sudo apt install git
-git clone -b foraging https://github.com/yorkrobotlab/swarmhack.git
