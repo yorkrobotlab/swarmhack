@@ -62,7 +62,7 @@ class Food:
         self.value = food_value         # Value of the food item (displayed inside the food in green text)
         self.distance = food_distance   # Distance between your robot and the food item
         self.angle = food_angle         # Angle between the forward direction of your robot and the food item (not needed)
-        self.opponents = food_opponents # List of Opponent objects (see below) - all robots within sensor range of this food item
+        self.opponents = food_opponents # List of Opponent objects (see below) - all robots within sensor range of this food item (including your robot)
 
     # Called when you print a Food object (e.g. print(food) in the code above) 
     def __repr__(self):
