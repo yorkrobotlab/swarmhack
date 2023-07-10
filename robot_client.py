@@ -24,7 +24,7 @@ robot_ids = [31]
 ## Define your foraging strategy in this function ##
 ####################################################
 
-# food_items is a list of Food objects (see definition below)
+# food_items is a list of Food objects (see definition below) - all of those within the pink sensor range (blue line between your robot and the food item)
 def foraging_strategy(food_items):
 
     # A target Food object must be returned at the end of this function
@@ -46,7 +46,7 @@ def foraging_strategy(food_items):
     print("Target:", target) # Print out the target food item
     print() # Print a new line between each iteration
 
-    return target # Return the target Food object to the code that controls the robot
+    return target # Return the target Food object to the code that controls the robot (displayed above your robot in red text, and as a red line to the target)
 
 # Class for representing Food objects
 # Access Food object properties in the code above as follows:
