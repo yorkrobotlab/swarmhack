@@ -172,7 +172,7 @@ class Tracker(threading.Thread):
     def run(self):
         while True:
             # Stop running once timer has expired
-            if self.running and (time.time() - self.start_time >= self.time_limit):
+            if self.running and self.time_remaining <= 0:
                 self.running = False
                 self.tasks = {}
                 self.task_counter = 0
@@ -341,8 +341,7 @@ class Tracker(threading.Thread):
                             cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                             cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
 
-                    # if self.running and (time.time() - self.start_time <= self.time_limit):
-                    if time.time() - self.start_time <= self.time_limit:
+                    if self.time_remaining > 0:
                         # Create any new tasks, if necessary
                         while len(self.tasks) < TASK_LIMIT:
                             id = self.task_counter
@@ -519,10 +518,13 @@ async def handler(websocket):
         send_reply = False
 
         if "targets" in message:
-            for robot_id, target in message["targets"].items():
-                id = int(robot_id)
-                if id in tracker.robots.keys():
-                    tracker.robots[id].target = int(target)
+            try:
+                for robot_id, target in message["targets"].items():
+                    id = int(robot_id)
+                    if id in tracker.robots.keys():
+                        tracker.robots[id].target = int(target)
+            except Exception as e:
+                print(e)
 
         if "check_awake" in message:
             reply["awake"] = True
