@@ -36,24 +36,58 @@ def foraging_strategy(food_items):
     for food in food_items:
         print(food)
 
+    # # Iterate over the food items within sensor range
+    # for food in food_items:
+    #     # Decide which food item to target:
+    #     if target is None: # If no target has been set yet...
+    #         target = food # Set the target to the first food item in the list...
+    #         continue # Then exit the loop
+
+    #     # # Target the closest food item
+    #     # if food.distance < target.distance:
+    #     #     target = food
+
+    #     # # Target the highest value food item
+    #     # if food.value > target.value:
+    #     #     target = food
+
+    #     # # Target the highest value food item that is closest
+    #     # if (food.value > target.value) or (food.value == target.value and food.distance <= target.distance):
+    #     #     target = food
+
+    if len(food_items) > 0:
+        target = food_items[0] # Set the target to the first food item in the list
+
+    food_items_closest_to = [] # List of food items that your robot is closer to than any opponents
+
     # Iterate over the food items within sensor range
     for food in food_items:
-        # Decide which food item to target:
-        if target is None: # If no target has been set yet...
-            target = food # Set the target to the first food item in the list...
-            continue # Then exit the loop
 
-        # # Target the closest food item
-        # if food.distance < target.distance:
-        #     target = food
+        closest = True # Start out assuming that your robot is closer to this food item than any opponents
 
-        # # Target the highest value food item
-        # if food.value > target.value:
-        #     target = food
+        # Iterate over the opponents within sensor range of this food item
+        for opponent in food.opponents:
+            if opponent.distance < food.distance: # If this opponent is closer to this food item than your robot...
+                closest = False # Then your robot is not the closest robot to this food item
+                break # No need to consider any other opponents
 
-        # Target the highest value food item that is closest
-        if (food.value > target.value) or (food.value == target.value and food.distance <= target.distance):
-            target = food
+        if closest: # If your robot is indeed closest to this food item...
+            food_items_closest_to.append(food) # Add it to the list of food items that it is closest to
+
+    # If your robot was not the closest to any of the food items (empty list)
+    if len(food_items_closest_to) == 0:
+        # Iterate over the food items within sensor range
+        for food in food_items:
+            # Target the highest value food item that is closest
+            if (food.value > target.value) or (food.value == target.value and food.distance <= target.distance):
+                target = food
+    else:
+        print("Closest to:")
+        # Iterate over the food items that your robot is closest to
+        for food in food_items_closest_to:
+            print(food)
+            if food.value > target.value: # Target the food item of the highest value
+                target = food
 
     print("Target:", target) # Print out the target food item
     print() # Print a new line between each iteration
