@@ -473,7 +473,7 @@ class Tracker(threading.Thread):
                         self.time_remaining = 0
                     mins, secs = divmod(self.time_remaining, 60)
                     timer = '{:02d}:{:02d}'.format(mins, secs)
-                    text = f"Timer: {timer}"
+                    text = f"Time remaining: {timer}"
                     font = cv2.FONT_HERSHEY_SIMPLEX
                     font_scale = 2
                     thickness = 5
