@@ -43,6 +43,18 @@ def foraging_strategy(food_items):
             target = food # Set the target to the first food item in the list...
             continue # Then exit the loop
 
+        # # Target the closest food item
+        # if food.distance < target.distance:
+        #     target = food
+
+        # # Target the highest value food item
+        # if food.value > target.value:
+        #     target = food
+
+        # Target the highest value food item that is closest
+        if (food.value > target.value) or (food.value == target.value and food.distance <= target.distance):
+            target = food
+
     print("Target:", target) # Print out the target food item
     print() # Print a new line between each iteration
 
