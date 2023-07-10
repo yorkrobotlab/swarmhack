@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from robots import robots, server_none, server_york
+from robots import robots, server_york
 
 import asyncio
 import websockets
@@ -17,118 +17,78 @@ import colorama
 from colorama import Fore
 colorama.init(autoreset=True)
 
-# Specify robot IDs to work with here. For example for robots 31-40 use:
-# robot_ids = range(31, 41)
-robot_ids = [33]
+# Specify robot ID to work with here (as a single-element list)
+robot_ids = [31]
 
+####################################################
+## Define your foraging strategy in this function ##
+####################################################
+
+# food_items is a list of Food objects (see definition below)
 def foraging_strategy(food_items):
 
+    # A target Food object must be returned at the end of this function
+    # Initialising this variable to None ensures that something will always be returned
+    # Overwrite the value of this variable later with your choice of target
     target = None
 
-    print(food_items)
-
-    closest_to = []
-
+    # Print out food items within sensor range
     for food in food_items:
         print(food)
 
-        # if target is None:
-        #     target = food
-        #     continue
+    # Iterate over the food items within sensor range
+    for food in food_items:
+        # Decide which food item to target:
+        if target is None: # If no target has been set yet...
+            target = food # Set the target to the first food item in the list...
+            continue # Then exit the loop
 
-        # if food.distance > target.distance:
-        #     target = food
+    print("Target:", target) # Print out the target food item
+    print() # Print a new line between each iteration
 
-        # if food.value > target.value:
-        #     target = food
-        
-        # if (food.value >= target.value) and (food.distance < target.distance):
-        #     target = food
+    return target # Return the target Food object to the code that controls the robot
 
-        closest = True
-
-        for opponent in food.opponents:
-            if opponent.distance < food.distance:
-                closest = False
-                break
-        
-        if closest:
-            closest_to.append(food)
-
-    # If not closest to any food item
-    if len(closest_to) == 0:
-        print("NOT CLOSEST TO!")
-        for food in food_items:
-            # Set the target to the first food item initially   
-            if target is None:
-                target = food
-                continue
-
-            # Set the target to the closest food item with the highest value
-            if (food.value >= target.value) and (food.distance < target.distance):
-                target = food
-    else:
-        print("CLOSEST TO:")
-        for food in closest_to:
-            print(food)
-            # Set the target to the first food item initially   
-            if target is None:
-                target = food
-                continue
-
-            # Set the target to the highest value food item out of the ones we are closest to
-            if food.value > target.value:
-                target = food
-
-    print("TARGET:", target)
-
-    # food_items.sort(key = lambda x: x.value, reverse = True)
-    # print("SORTED:")
-    # for food in food_items:
-    #     print(food)
-
-    return target
-
-    
+# Class for representing Food objects
+# Access Food object properties in the code above as follows:
+# food.id
+# food.value
+# food.distance
+# food.angle (not needed)
+# food.opponents
 class Food:
+    # Constructor method that initialises the Food object
     def __init__(self, food_id, food_value, food_distance, food_angle, food_opponents):
-        self.id = food_id
-        self.value = food_value
-        self.distance = food_distance
-        self.angle = food_angle
-        self.opponents = food_opponents
+        self.id = food_id               # Unique ID of the food item (displayed above the food in blue text)
+        self.value = food_value         # Value of the food item (displayed inside the food in green text)
+        self.distance = food_distance   # Distance between your robot and the food item
+        self.angle = food_angle         # Angle between the forward direction of your robot and the food item (not needed)
+        self.opponents = food_opponents # List of Opponent objects (see below) - all robots within sensor range of this food item
 
+    # Called when you print a Food object (e.g. print(food) in the code above) 
     def __repr__(self):
         return f'Food(ID: {self.id}, Value: {self.value}, Distance: {self.distance}, Angle: {self.angle}, Opponents: {self.opponents})'
     
-
+# Class for representing Opponent objects
+# Access Opponent object properties in the code above as follows:
+# opponent.id
+# opponent.distance
 class Opponent:
+    # Constructor method that initialises the Opponent object
     def __init__(self, opponent_id, opponent_distance):
-        self.id = opponent_id
-        self.distance = opponent_distance
+        self.id = opponent_id             # Unique ID of opponent (displayed inside the robot in white text)
+        self.distance = opponent_distance # Distance between the opponent and the food item
 
+    # Called when you print an Opponent object
     def __repr__(self):
         return f'Opponent(ID: {self.id}, Distance: {self.distance})'
 
 
-##
-# Replace `server_none` with one of `server_york`, `server_sheffield`, or `server_manchester` here,
-#  or specify a custom server IP address as a string.
-# All ports should remain at 80.
-##
+########################################
+## Do not edit any of the code below! ##
+########################################
 server_address = server_york
 server_port = 6000
 robot_port = 6000
-##
-
-if len(server_address) == 0:
-    raise Exception(f"Enter local tracking server address on line {inspect.currentframe().f_lineno - 6}, "
-                    f"then re-run this script.")
-
-
-# Persistent Websockets!!!!!!!!!!!!!!!!
-# https://stackoverflow.com/questions/59182741/python-websockets-lib-client-persistent-connection-with-class-implementation
-
 
 ##
 # Handle Ctrl+C termination
@@ -204,7 +164,7 @@ class Robot:
         self.right_speed = 0
         self.turn_time = time.time()
 
-        self.target = Food(-1, 0, 0, 0, [])
+        self.target = Food(-1, 0, 0, 0, []) # Undefined initial target
 
         # Pi-puck IR is more sensitive than Mona, so use higher threshold for obstacle detection
         if robot_id < 31:
@@ -324,11 +284,11 @@ async def get_server_data():
             # active_robots[id].neighbours = {k: v for (k, v) in robot["neighbours"].items() if int(k) in active_robots.keys()}
             active_robots[id].neighbours = robot["neighbours"]
             active_robots[id].tasks = robot["tasks"]
-            print(f"Robot {id}")
-            print(f"Orientation = {active_robots[id].orientation}")
-            print(f"Neighbours = {active_robots[id].neighbours}")
-            print(f"Tasks = {active_robots[id].tasks}")
-            print()
+            # print(f"Robot {id}")
+            # print(f"Orientation = {active_robots[id].orientation}")
+            # print(f"Neighbours = {active_robots[id].neighbours}")
+            # print(f"Tasks = {active_robots[id].tasks}")
+            # print()
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -380,10 +340,10 @@ async def get_data(robot):
         robot.battery_voltage = reply["battery"]["voltage"]
         robot.battery_percentage = reply["battery"]["percentage"]
 
-        print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
-        print("[Robot {}] Battery: {:.2f}V, {}%" .format(robot.id,
-                                                         robot.battery_voltage,
-                                                         robot.battery_percentage))
+        # print(f"[Robot {robot.id}] IR readings: {robot.ir_readings}")
+        # print("[Robot {}] Battery: {:.2f}V, {}%" .format(robot.id,
+        #                                                  robot.battery_voltage,
+        #                                                  robot.battery_percentage))
 
     except Exception as e:
         print(f"{type(e).__name__}: {e}")
@@ -400,7 +360,8 @@ async def send_commands(robot):
             message["set_motor_speeds"]["right"] = 0
             await robot.connection.send(json.dumps(message))
 
-        food_items = []        
+        # Create food item objects from task data
+        food_items = []
 
         for task_id, task in robot.tasks.items():
             food_value = task["workers"]
@@ -408,18 +369,20 @@ async def send_commands(robot):
             food_angle = task["bearing"]
             food_opponents = []
 
+            # Opponents are robots within range of the food item
             for opponent_id, opponent in task["opponents"].items():
                 opponent_distance = opponent["range"]
                 food_opponents.append(Opponent(opponent_id, opponent_distance))
 
             food_items.append(Food(task_id, food_value, food_distance, food_angle, food_opponents))
 
+        # Current target is determined by foraging strategy function at top of file
         robot.target = foraging_strategy(food_items)
 
         # Construct command message
         message = {}
 
-        print("RobotState:", robot.state)
+        # print("RobotState:", robot.state)
 
         # Autonomous mode
         if robot.state == RobotState.FORWARDS:
@@ -455,19 +418,19 @@ async def send_commands(robot):
             if robot.target is not None:
 
                 bearing = robot.target.angle
-                turn_threshold_angle = 5
-                min_speed = int(robot.MAX_SPEED * 0.7)
+                turn_threshold_angle = 5 # Drive straight if target is +/- this number of degrees straight ahead
+                min_speed = int(robot.MAX_SPEED * 0.7) # 70% of max speed at minimum to prevent motors stalling
 
-                angle_ratio = abs(bearing)/180
-                scaled_speed = (robot.MAX_SPEED - min_speed) * angle_ratio
-                speed = int(scaled_speed + min_speed)
+                angle_ratio = abs(bearing)/180 # Bearing is 0 to +/-180 - convert to ratio of half a full turn
+                scaled_speed = (robot.MAX_SPEED - min_speed) * angle_ratio # Scale robot speed based on angle (turn faster at larger angles)
+                speed = int(scaled_speed + min_speed) # Offset by minimum motor speed
 
-                print("bearing:", round(bearing, 2))
-                print("angle_ratio:", round(angle_ratio, 2))
-                print("max_speed:", robot.MAX_SPEED)
-                print("min_speed:", min_speed)
-                print("scaled_speed:", round(scaled_speed, 2))
-                print("speed:", speed)
+                # print("bearing:", round(bearing, 2))
+                # print("angle_ratio:", round(angle_ratio, 2))
+                # print("max_speed:", robot.MAX_SPEED)
+                # print("min_speed:", min_speed)
+                # print("scaled_speed:", round(scaled_speed, 2))
+                # print("speed:", speed)
 
                 if bearing > turn_threshold_angle:
                     robot.left_speed = speed
@@ -475,11 +438,12 @@ async def send_commands(robot):
                 elif bearing < -turn_threshold_angle:
                     robot.left_speed = 0
                     robot.right_speed = speed
-                else:
+                else: # Perform "random walk" (drive forward and avoid obstacles) if no target is specified
                     robot.left_speed = robot.right_speed = robot.MAX_SPEED
             else:
                 robot.state = RobotState.FORWARDS
 
+            # Avoid obstacles if any detected on IR sensors
             if (time.time() - robot.turn_time > 0.5) and any(ir > robot.ir_threshold for ir in robot.ir_readings):
                 robot.turn_time = time.time()
                 robot.state = random.choice((RobotState.LEFT, RobotState.RIGHT))
@@ -533,22 +497,22 @@ if __name__ == "__main__":
     # Only communicate with robots that were successfully connected to
     while True:
         # Request all robot virtual sensor data from the tracking server
-        print(Fore.GREEN + "[INFO]: Requesting data from tracking server")
+        # print(Fore.GREEN + "[INFO]: Requesting data from tracking server")
         loop.run_until_complete(get_server_data())
 
         # Request sensor data from detected robots
-        print(Fore.GREEN + "[INFO]: Robots detected:", ids)
-        print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
+        # print(Fore.GREEN + "[INFO]: Robots detected:", ids)
+        # print(Fore.GREEN + "[INFO]: Requesting data from detected robots")
         loop.run_until_complete(get_robot_data(ids))
 
         # Calculate next step of control algorithm, and send commands to robots
-        print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
+        # print(Fore.GREEN + "[INFO]: Sending commands to detected robots")
         loop.run_until_complete(send_robot_commands(ids))
 
-        print(Fore.GREEN + "[INFO]: Sending data to tracking server")
+        # print(Fore.GREEN + "[INFO]: Sending data to tracking server")
         loop.run_until_complete(send_server_commands())
 
-        print()
+        # print()
 
         # TODO: Close websocket connections
         if kill_now():

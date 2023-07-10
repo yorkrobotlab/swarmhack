@@ -28,6 +28,4 @@ monas = {
 
 robots = {**pipucks, **monas}
 
-server_none = ""
 server_york = "144.32.175.240"
-
