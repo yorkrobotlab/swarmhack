@@ -306,7 +306,11 @@ class Tracker(threading.Thread):
                         cv2.line(image, (tag.centre.x, tag.centre.y), (forward_point.x, forward_point.y), green, 3, lineType=cv2.LINE_AA)
 
                         # Draw tag ID
-                        text = robot_names[tag.id]
+                        text = "-1"
+                        try:
+                            text = robot_names[tag.id]
+                        except Exception as e:
+                            print(e)
                         # text = str(tag.id)
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         font_scale = 1.5
