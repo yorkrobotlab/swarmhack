@@ -201,14 +201,16 @@ class Tracker(threading.Thread):
                     if self.calibrated:
                         if tag.id != 0: # Reserved tag ID for corners
                             position = Vector2D(tag.centre.x / self.scale_factor, tag.centre.y / self.scale_factor) # Convert pixel coordinates to metres
-                            if (tag.id in self.robots.keys()):
-                                self.robots[tag.id].position = position
-                                self.robots[id].orientation = tag.angle
-                                self.robots[id].tag = tag
-                                # self.robots[id].tasks = {}
-                                self.robots[id].neighbours = {}
-                            else:
-                                self.robots[id] = Robot(tag, position)
+                            size = abs(tag.front - tag.centre)
+                            if size < 30: # Nasty hack to stop the camera from detecting erroneous tags larger than robots
+                                if (tag.id in self.robots.keys()):
+                                    self.robots[tag.id].position = position
+                                    self.robots[id].orientation = tag.angle
+                                    self.robots[id].tag = tag
+                                    # self.robots[id].tasks = {}
+                                    self.robots[id].neighbours = {}
+                                else:
+                                    self.robots[id] = Robot(tag, position)
                     else: # Only calibrate the first time two corner tags are detected
                        
                         if tag.id == 0: # Reserved tag ID for corners
