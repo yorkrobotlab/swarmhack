@@ -152,8 +152,8 @@ class Tracker(threading.Thread):
                 print("Starting timer")
                 if self.running == False:
                     self.running = True
-                    # self.tasks = {}
-                    # self.task_counter = 0
+                    self.tasks = {}
+                    self.task_counter = 0
                     self.robots = {} # Also clears robot scores
                     self.start_time = time.time()
             if key.char == 'm':
