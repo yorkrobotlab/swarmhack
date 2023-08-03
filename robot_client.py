@@ -18,7 +18,8 @@ from colorama import Fore
 colorama.init(autoreset=True)
 
 # Specify robot ID to work with here (as a single-element list)
-robot_ids = [31]
+# robot_ids = [31, 32]
+robot_ids = range(31, 41)
 
 ####################################################
 ## Define your foraging strategy in this function ##
@@ -163,6 +164,9 @@ class Robot:
         self.left_speed = 0
         self.right_speed = 0
         self.turn_time = time.time()
+        self.colour_time = time.time()
+
+        self.colour = random.choice(["red", "blue"])
 
         self.target = Food(-1, 0, 0, 0, []) # Undefined initial target
 
@@ -286,7 +290,7 @@ async def get_server_data():
             active_robots[id].tasks = robot["tasks"]
             # print(f"Robot {id}")
             # print(f"Orientation = {active_robots[id].orientation}")
-            # print(f"Neighbours = {active_robots[id].neighbours}")
+            print(f"Neighbours = {active_robots[id].neighbours}")
             # print(f"Tasks = {active_robots[id].tasks}")
             # print()
 
@@ -296,13 +300,18 @@ async def get_server_data():
 
 async def send_server_commands():
     try:
-        message = {"targets": {}}
+        message = {"colours": {}}
 
         for robot_id, robot in active_robots.items():
-            target = -1
-            if robot.target:
-                target = robot.target.id
-            message["targets"][robot_id] = target
+            message["colours"][robot_id] = robot.colour
+
+        # message = {"targets": {}}
+
+        # for robot_id, robot in active_robots.items():
+        #     target = -1
+        #     if robot.target:
+        #         target = robot.target.id
+        #     message["targets"][robot_id] = target
 
         await server_connection.send(json.dumps(message))
 
@@ -458,6 +467,40 @@ async def send_commands(robot):
             message["set_leds_colour"] = "red"
         else:
             message["set_leds_colour"] = "green"
+
+        current_time = time.time()
+
+        if (current_time - robot.colour_time) > 3 + random.random():
+            robot.colour_time = current_time
+
+            red_count = 0
+            blue_count = 0
+            
+            for neighbour_id, neighbour in robot.neighbours.items():
+                print(neighbour_id, neighbour)
+                if neighbour["colour"] == "red":
+                    red_count += 1
+                elif neighbour["colour"] == "blue":
+                    blue_count += 1
+
+            if red_count > blue_count:
+                robot.colour = "red"
+            else:
+                robot.colour = "blue"
+
+        # current_time = time.time()
+        # 
+        # if (current_time - robot.colour_time) > 3:
+        #     robot.colour = random.choice(["red", "blue"])
+        #     # if robot.colour == "red":
+        #     #     robot.colour = "blue"
+        #     # elif robot.colour == "blue":
+        #     #     robot.colour = "red"
+        #     robot.colour_time = current_time
+
+        message["set_leds_colour"] = robot.colour
+        message["set_motor_speeds"]["left"] = 0
+        message["set_motor_speeds"]["right"] = 0
 
         # Send command message
         await robot.connection.send(json.dumps(message))
