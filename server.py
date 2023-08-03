@@ -81,13 +81,15 @@ class Robot:
         self.tasks = {}
         self.score = 0
         self.target = -1
+        self.colour = ""
 
 class SensorReading:
-    def __init__(self, range, bearing, orientation=0, workers=0):
+    def __init__(self, range, bearing, orientation=0, workers=0, colour=""):
         self.range = range
         self.bearing = bearing
         self.orientation = orientation
         self.workers = workers
+        self.colour = colour
 
 class Task:
     def __init__(self, id, workers, position, radius, time_limit):
@@ -201,14 +203,17 @@ class Tracker(threading.Thread):
                     if self.calibrated:
                         if tag.id != 0: # Reserved tag ID for corners
                             position = Vector2D(tag.centre.x / self.scale_factor, tag.centre.y / self.scale_factor) # Convert pixel coordinates to metres
-                            if (tag.id in self.robots.keys()):
-                                self.robots[tag.id].position = position
-                                self.robots[id].orientation = tag.angle
-                                self.robots[id].tag = tag
-                                # self.robots[id].tasks = {}
-                                self.robots[id].neighbours = {}
-                            else:
-                                self.robots[id] = Robot(tag, position)
+                            size = abs(tag.front - tag.centre)
+                            if size < 30: # Nasty hack to stop the camera from detecting erroneous tags larger than robots
+                                if (tag.id in self.robots.keys()):
+                                    self.robots[tag.id].position = position
+                                    self.robots[id].orientation = tag.angle
+                                    self.robots[id].tag = tag
+                                    # self.robots[id].tasks = {}
+                                    # self.robots[id].neighbours = {}
+                                else:
+                                    self.robots[id] = Robot(tag, position)
+
                     else: # Only calibrate the first time two corner tags are detected
                        
                         if tag.id == 0: # Reserved tag ID for corners
@@ -257,7 +262,11 @@ class Tracker(threading.Thread):
                                     absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
                                     relative_bearing = absolute_bearing - robot.orientation
                                     normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-                                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation)
+                                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation, colour=other_robot.colour)
+                                    print("other_robot.colour:", other_robot.colour)
+                                    print("robot.neighbours[other_id]:", robot.neighbours[other_id].colour)
+                                    for robot_id, robot in tracker.robots.items():
+                                        print(robot_id, robot.position, robot.colour)
 
                         # Draw tag
                         tag = robot.tag
@@ -328,10 +337,11 @@ class Tracker(threading.Thread):
 
                         if self.show_debug_info:
                             # Draw robot target
-                            if robot.target < 0:
-                                text = "X"
-                            else:
-                                text = str(robot.target)
+                            # if robot.target < 0:
+                            #     text = "X"
+                            # else:
+                            #     text = str(robot.target)
+                            text = robot.colour
                             font = cv2.FONT_HERSHEY_SIMPLEX
                             font_scale = 1.5
                             thickness = 4
@@ -526,6 +536,15 @@ async def handler(websocket):
             except Exception as e:
                 print(e)
 
+        if "colours" in message:
+            try:
+                for robot_id, colour in message["colours"].items():
+                    id = int(robot_id)
+                    if id in tracker.robots.keys():
+                        tracker.robots[id].colour = colour
+            except Exception as e:
+                print(e)
+
         if "check_awake" in message:
             reply["awake"] = True
             send_reply = True
@@ -538,11 +557,12 @@ async def handler(websocket):
                 reply[id]["neighbours"] = {}
                 reply[id]["tasks"] = {}
 
-                # for neighbour_id, neighbour in robot.neighbours.items():
-                #     reply[id]["neighbours"][neighbour_id] = {}
-                #     reply[id]["neighbours"][neighbour_id]["range"] = round(neighbour.range, 2)
-                #     reply[id]["neighbours"][neighbour_id]["bearing"] = round(neighbour.bearing, 2)
-                #     reply[id]["neighbours"][neighbour_id]["orientation"] = round(neighbour.orientation, 2)
+                for neighbour_id, neighbour in robot.neighbours.items():
+                    reply[id]["neighbours"][neighbour_id] = {}
+                    reply[id]["neighbours"][neighbour_id]["range"] = round(neighbour.range, 2)
+                    reply[id]["neighbours"][neighbour_id]["bearing"] = round(neighbour.bearing, 2)
+                    reply[id]["neighbours"][neighbour_id]["orientation"] = round(neighbour.orientation, 2)
+                    reply[id]["neighbours"][neighbour_id]["colour"] = neighbour.colour
 
                 for task_id, task in robot.tasks.items():
                     reply[id]["tasks"][task_id] = {}
