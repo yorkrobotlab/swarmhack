@@ -370,7 +370,10 @@ class Tracker(threading.Thread):
                             position = (
                             int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) - int(textsize[1] * 2))
                             cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                            cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
+                            if robot.colour == "red":
+                                cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
+                            else:
+                                cv2.putText(image, text, position, font, font_scale, cyan, thickness, cv2.LINE_AA)
 
                     if self.time_remaining > 0:
                         # Create any new tasks, if necessary
