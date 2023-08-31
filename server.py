@@ -82,14 +82,18 @@ class Robot:
         self.score = 0
         self.target = -1
         self.colour = ""
+        self.blue_count = 0
+        self.red_count = 0
 
 class SensorReading:
-    def __init__(self, range, bearing, orientation=0, workers=0, colour=""):
+    def __init__(self, range, bearing, orientation=0, workers=0, colour="", red_count=0, blue_count=0):
         self.range = range
         self.bearing = bearing
         self.orientation = orientation
         self.workers = workers
         self.colour = colour
+        self.red_count = red_count
+        self.blue_count = blue_count
 
 class Task:
     def __init__(self, id, workers, position, radius, time_limit):
@@ -179,6 +183,11 @@ class Tracker(threading.Thread):
                 self.tasks = {}
                 self.task_counter = 0
 
+            self.tasks = {}
+            self.task_counter = 0
+            self.running = False
+            self.time_remaining = 0
+
             image = self.camera.get_frame()
             overlay = image.copy()
             
@@ -210,7 +219,7 @@ class Tracker(threading.Thread):
                                     self.robots[id].orientation = tag.angle
                                     self.robots[id].tag = tag
                                     # self.robots[id].tasks = {}
-                                    # self.robots[id].neighbours = {}
+                                    self.robots[id].neighbours = {}
                                 else:
                                     self.robots[id] = Robot(tag, position)
 
@@ -247,7 +256,7 @@ class Tracker(threading.Thread):
 
                     # Draw boundary of virtual environment based on corner tag positions
                     cv2.rectangle(image, (self.min_x, self.min_y), (self.max_x, self.max_y), green, 1, lineType=cv2.LINE_AA)
-            
+
                     # Process robots
                     for id, robot in self.robots.items():
 
@@ -262,11 +271,13 @@ class Tracker(threading.Thread):
                                     absolute_bearing = math.degrees(math.atan2(other_robot.position.y - robot.position.y, other_robot.position.x - robot.position.x))
                                     relative_bearing = absolute_bearing - robot.orientation
                                     normalised_bearing = angles.normalize(relative_bearing, -180, 180)
-                                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation, colour=other_robot.colour)
+                                    robot.neighbours[other_id] = SensorReading(range, normalised_bearing, other_robot.orientation, colour=other_robot.colour, red_count=other_robot.red_count, blue_count=other_robot.blue_count)
                                     print("other_robot.colour:", other_robot.colour)
                                     print("robot.neighbours[other_id]:", robot.neighbours[other_id].colour)
-                                    for robot_id, robot in tracker.robots.items():
-                                        print(robot_id, robot.position, robot.colour)
+                                    print("robot id :", robot.id, other_robot.id)
+                                    print("robot.colour_counts:", other_robot.red_count, other_robot.blue_count)
+                                    for temp_robot_id, temp_robot in self.robots.items():
+                                        print(temp_robot_id, robot.position, robot.colour)
 
                         # Draw tag
                         tag = robot.tag
@@ -286,11 +297,11 @@ class Tracker(threading.Thread):
                             cv2.circle(overlay, (tag.centre.x, tag.centre.y), sensor_range_pixels, magenta, -1, lineType=cv2.LINE_AA)
 
                         if self.show_debug_info:
-                            # # Draw lines between robots if they are within sensor range
-                            # for neighbour_id in robot.neighbours.keys():
-                            #     neighbour = self.robots[neighbour_id]
-                            #     cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
-                            #     cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
+                            # Draw lines between robots if they are within sensor range
+                            for neighbour_id in robot.neighbours.keys():
+                                neighbour = self.robots[neighbour_id]
+                                cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), black, 10, lineType=cv2.LINE_AA)
+                                cv2.line(image, (tag.centre.x, tag.centre.y), (neighbour.tag.centre.x, neighbour.tag.centre.y), red, 3, lineType=cv2.LINE_AA)
 
                             # Draw lines to tasks if they are within sensor range
                             for robot_task_id in robot.tasks.keys():
@@ -325,15 +336,25 @@ class Tracker(threading.Thread):
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
                         cv2.putText(image, text, position, font, font_scale, white, thickness, cv2.LINE_AA)
 
-                        # Draw robot score
-                        text = str(robot.score)
+                        # Draw robot blue count
+                        text = str(robot.blue_count)
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         font_scale = 1.5
                         thickness = 4
                         textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
                         position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) + int(textsize[1] * 2))
                         cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
-                        cv2.putText(image, text, position, font, font_scale, yellow, thickness, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, cyan, thickness, cv2.LINE_AA)
+
+                        # Draw robot red count
+                        text = str(robot.red_count)
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = 1.5
+                        thickness = 4
+                        textsize = cv2.getTextSize(text, font, font_scale, thickness)[0]
+                        position = (int(tag.centre.x - textsize[0] / 2), int(tag.centre.y + textsize[1] / 2) - int(textsize[1] * 3))
+                        cv2.putText(image, text, position, font, font_scale, black, thickness * 3, cv2.LINE_AA)
+                        cv2.putText(image, text, position, font, font_scale, red, thickness, cv2.LINE_AA)
 
                         if self.show_debug_info:
                             # Draw robot target
@@ -522,7 +543,6 @@ class Tracker(threading.Thread):
 async def handler(websocket):
     async for packet in websocket:
         message = json.loads(packet)
-        
         # Process any requests received
         reply = {}
         send_reply = False
@@ -578,6 +598,27 @@ async def handler(websocket):
                                 reply[id]["tasks"][task_id]["opponents"][opponent_id]["range"] = round(opponent.range, 2)
 
             send_reply = True
+
+        if "red_count" in message:
+            print("control comes here")
+            try:
+                for robot_id, red_count in message["red_count"].items():
+                    id = int(robot_id)
+                    if id in tracker.robots.keys():
+                        tracker.robots[id].red_count = int(red_count)
+                        print("just here input  given of colour counts", red_count, tracker.robots[id].red_count)
+            except Exception as e:
+                print(e)
+
+        if "blue_count" in message:
+            try:
+                for robot_id, blue_count in message["blue_count"].items():
+                    id = int(robot_id)
+                    if id in tracker.robots.keys():
+                        tracker.robots[id].blue_count = int(blue_count)
+                        print("just here input  given of colour counts", blue_count, tracker.robots[id].blue_count)
+            except Exception as e:
+                print(e)
 
         # Send reply, if requested
         if send_reply:
